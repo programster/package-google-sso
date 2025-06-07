@@ -1,0 +1,27 @@
+{
+    "name": "programster/google-sso",
+    "description": "Apackage for integrating with Google SSO",
+    "keywords": ["google", "sso", "oauth", "oidc"],
+    "homepage": "https://github.com/programster/package-google-sso",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Stuart Page",
+            "homepage": "https://blog.programster.org"
+        }
+    ],
+    "require": {
+        "php": ">=8.2.0",
+        "psr/http-factory": "^1.1",
+        "psr/http-client": "^1.0",
+        "ext-json": "*",
+        "firebase/php-jwt": "^6.11",
+        "psr/cache": "^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Programster\\GoogleSso\\": "src/",
+            "Programster\\GoogleSso\\Exceptions\\": "src/exceptions/"
+        }
+    }
+}

@@ -1,0 +1,4 @@
+testing/settings.php
+vendor
+composer.lock
+.idea
