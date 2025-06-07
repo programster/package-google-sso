@@ -22,7 +22,9 @@ composer require programster/google-sso
 ```
 
 ### Example Code
-The following example creates a Google SSO client and sends the user to Google to login.
+There is an[example codebase on GitHub](https://github.com/programster/Google-SSO-Demo/tree/using-programster-google-sso-package) 
+that demonstrates using this package. Also, the following code snippet creates a Google SSO client 
+and sends the user to Google to login.
 
 ```php
 <?php
