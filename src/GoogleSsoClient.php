@@ -154,7 +154,7 @@ class GoogleSsoClient
         if ($state === null)
         {
             // handle google response with oauth code.
-            $code = $_GET['state'];
+            $state = $_GET['state'];
         }
 
         if ($state !== $_SESSION[$this->sessionCsrfTokenKey])
