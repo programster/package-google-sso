@@ -68,8 +68,8 @@ class GoogleSsoClient
      * the JWT we received on our handler is actually from Google, and someone isn't trying to hack their way in with
      * a made up JWT that wasn't from Google.
      *
-     * @param string $googleOauthUrl - the base of all of the Oauth2 endpoints for Google. You shouldn't need to
-     * override this, but this is here just in case it changes and I fail to update this package in time.
+     * @param string $googleOauthUrl - the base of Google's OAuth2 token endpoint, which "/token" is added to. You
+     * shouldn't need to change it. It doesn't change the login page's URL, which is always accounts.google.com's.
      *
      * @param int $jwtLeewaySeconds - how many seconds this server's clock may be out from Google's, when checking the
      * ID token's issued-at and expiry times. Defaults to 60.
@@ -271,6 +271,8 @@ class GoogleSsoClient
      * @throws ExceptionInvalidIdToken - if the ID token wasn't issued by Google, or to this client.
      * @throws ExceptionMfaRequired - with MfaPolicyEnum::REQUIRE, if Google doesn't say the user used MFA.
      * @throws \UnexpectedValueException - if php-jwt rejects the ID token, e.g. a bad signature, or it has expired.
+     * @throws \DomainException - if php-jwt can't use the ID token or a certificate, e.g. an unsupported algorithm.
+     * @throws \InvalidArgumentException - if php-jwt can't read one of Google's certificates.
      * @throws \Psr\Cache\InvalidArgumentException
      * @throws \Psr\Http\Client\ClientExceptionInterface
      */
@@ -659,7 +661,7 @@ class GoogleSsoClient
         string $loginHint
     ) : array
     {
-        $isDomain = (preg_match('/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i', $hostedDomainHint) === 1);
+        $isDomain = (preg_match('/^[a-z0-9-]+(\.[a-z0-9-]+)+\z/i', $hostedDomainHint) === 1);
 
         if ($hostedDomainHint !== "" && $hostedDomainHint !== "*" && !$isDomain)
         {

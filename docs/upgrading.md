@@ -1,5 +1,6 @@
 # Upgrading
 
+- [From 0.4.0 to 0.4.1](#from-040-to-041)
 - [From 0.3.0 to 0.4.0](#from-030-to-040)
 - [From 0.2.0 to 0.3.0](#from-020-to-030)
 - [From 0.1.0 to 0.2.0](#from-010-to-020)
@@ -7,6 +8,16 @@
     - [Changes you should make](#changes-you-should-make)
     - [Changes in behaviour](#changes-in-behaviour)
     - [New features](#new-features)
+
+## From 0.4.0 to 0.4.1
+Nothing has been removed or changed in a way that needs your code to change.
+
+- **The package Composer installs leaves out the docs and tests**, so only the code, README and licence end up in
+  `vendor/`. Read the docs on GitHub instead.
+- **A `hostedDomainHint` with a trailing newline**, e.g. `"example.com\n"`, is refused with an
+  `\InvalidArgumentException`, like any other hint that isn't a domain. It used to be sent to Google.
+- **Docblock corrections**: `googleOauthUrl` only sets the token endpoint, `handleGoogleSsoCallback()` lists the two
+  exceptions php-jwt can throw, and `GoogleUserData::createFromJwt()` is marked `@internal`, as it checks nothing.
 
 ## From 0.3.0 to 0.4.0
 Nothing has been removed or changed in a way that needs your code to change.

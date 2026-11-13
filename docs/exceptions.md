@@ -48,7 +48,9 @@ so catching that one catches them too.
 | `ExceptionInvalidIdToken` | The ID token wasn't issued by Google, was issued to a different client, or is missing a claim Google always includes. | |
 | `ExceptionMfaRequired` | With `MfaPolicyEnum::REQUIRE`, Google doesn't say the user signed in with multi-factor authentication, or doesn't say how they signed in at all. | `getAuthenticationMethods()` |
 
-The constructor also throws `\InvalidArgumentException` if `jwtLeewaySeconds` is negative.
+`\InvalidArgumentException` is thrown for a mistake in your code, as soon as you make it: by the constructor if
+`jwtLeewaySeconds` is negative, and by `createGoogleSsoLoginUrl()` for a `hostedDomainHint` that isn't a domain (see
+[Login options](login-options.md#suggesting-a-workspace-domain-hd)).
 
 ## Exceptions from elsewhere
 Some exceptions come from the libraries the package uses, and are passed on as they are:
@@ -61,6 +63,7 @@ Some exceptions come from the libraries the package uses, and are passed on as t
 | `\UnexpectedValueException` | The ID token is malformed, or signed with a key that isn't in Google's certificates, even after fetching them again (the three above extend it too). |
 | `\DomainException` | The ID token or certificates can't be decoded, e.g. an unsupported algorithm. |
 | `\Psr\Http\Client\ClientExceptionInterface` | The HTTP client couldn't reach Google at all, e.g. a DNS failure or timeout. |
+| `\InvalidArgumentException` | One of Google's certificates can't be read by php-jwt, e.g. it is missing a field. |
 | `\Psr\Cache\InvalidArgumentException` | The cache pool doesn't accept the cache key (only if you changed it). |
 | `\Random\RandomException` | `createGoogleSsoLoginUrl()` couldn't get random bytes for the CSRF token, which only happens if the system has no source of randomness. |
 

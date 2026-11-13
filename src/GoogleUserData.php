@@ -75,6 +75,9 @@ class GoogleUserData
      * leaves out for some accounts (such as the family name or picture) default to an empty string, or for amr and
      * auth_time, which Google only sends when they are asked for, an empty array and 0.
      *
+     * @internal - GoogleSsoClient calls this once it has checked the ID token. Nothing is checked here, so don't create
+     * a GoogleUserData yourself from claims you haven't verified: use what handleGoogleSsoCallback() returns.
+     *
      * @param \stdClass $jwt - the decoded claims, as returned by \Firebase\JWT\JWT::decode().
      *
      * @return GoogleUserData
