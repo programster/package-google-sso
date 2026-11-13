@@ -1,13 +1,27 @@
-# Upgrading from 0.0.2
+# Upgrading
 
-- [Changes you should make](#changes-you-should-make)
-- [Changes in behaviour](#changes-in-behaviour)
-- [New features](#new-features)
+- [From 0.1.0 to 0.2.0](#from-010-to-020)
+- [From 0.0.2 to 0.1.0](#from-002-to-010)
+    - [Changes you should make](#changes-you-should-make)
+    - [Changes in behaviour](#changes-in-behaviour)
+    - [New features](#new-features)
 
+## From 0.1.0 to 0.2.0
+Nothing has been removed or changed in a way that needs your code to change.
+
+- **Every exception the package throws extends the new abstract `ExceptionGoogleSso`**, so you can catch them all at
+  once. They still extend `\Exception`, so existing `catch` blocks keep working. See [Exceptions](exceptions.md).
+- **`GoogleUserData::getClaims()`** gives every claim in the ID token, including any without a getter of their own.
+  See [The user's details](user-data.md#the-rest-of-the-id-token).
+- **Cached certificates are fetched again when a login is signed with a key that isn't in them**, e.g. because Google
+  has started using a new key since they were cached. Previously, those logins failed with an "invalid kid" error
+  until the cache expired. See [Caching](caching.md#how-long-to-cache-them-for).
+
+## From 0.0.2 to 0.1.0
 Nothing has been removed, and existing code keeps working, but some failures that used to give a PHP warning or a
 `TypeError` now throw a specific exception, so it is worth checking how your callback handles them.
 
-## Changes you should make
+### Changes you should make
 - **Use `handleGoogleSsoCallback($_GET)` instead of `handleGoogleSsoLogin()`.** The old method still works, but is
   deprecated. The new one takes the query parameters, so in a framework you can pass
   `$request->getQueryParams()`, rather than relying on `$_GET`.
@@ -17,7 +31,7 @@ Nothing has been removed, and existing code keeps working, but some failures tha
   say so. See [Security](security.md#matching-users-to-accounts).
 - **In a PSR-7 framework, use `createGoogleSsoLoginUrl()`** rather than `sendUserToGoogleLogin()`, which calls `die()`.
 
-## Changes in behaviour
+### Changes in behaviour
 - **The ID token's `aud` and `iss` are checked.** A token issued to a different client, or not by Google, throws
   `ExceptionInvalidIdToken`. If this happens after upgrading, the client ID and secret you are using are from
   different clients.
@@ -48,7 +62,7 @@ Nothing has been removed, and existing code keeps working, but some failures tha
 - **`sessionCsrfTokenKey` is deprecated.** It still works, but pass `new NativeSessionCsrfTokenStore("yourKey")` as the
   new `csrfTokenStore` option instead.
 
-## New features
+### New features
 - `GoogleUserData::getHostedDomain()`, for the `hd` claim, to only let in your Workspace's users.
 - `ExceptionGoogleLoginError::isAccessDenied()` and `getError()`.
 - `ExceptionMissingCallbackParameter::getParameterName()`.

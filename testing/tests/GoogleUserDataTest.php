@@ -101,3 +101,16 @@ $testWrongClaimTypes = function () : void {
 };
 
 $smoke->run("createFromJwt throws ExceptionInvalidIdToken for a claim of the wrong type", $testWrongClaimTypes);
+
+$testGetClaims = function () : void {
+    $extraClaims = ['amr' => ['pwd', 'mfa'], 'nested' => (object)['level' => 2], 'hd' => 'example.com'];
+    $claims = TestFixtures::validClaims($extraClaims);
+    $user = GoogleUserData::createFromJwt(json_decode(json_encode($claims)));
+    $rawClaims = $user->getClaims();
+    assert($rawClaims['amr'] === ['pwd', 'mfa'], "claims without a getter should be there too");
+    assert($rawClaims['nested'] === ['level' => 2], "claims within claims should be arrays, not objects");
+    assert($rawClaims['sub'] === $claims['sub'] && $rawClaims['hd'] === 'example.com');
+    assert(array_keys($rawClaims) === array_keys($claims), "every claim should be there, and nothing else");
+};
+
+$smoke->run("getClaims gives every claim in the ID token, as plain data", $testGetClaims);

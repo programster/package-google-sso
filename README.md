@@ -25,7 +25,7 @@ Google SSO
     - [Caching Google's certificates](docs/caching.md)
     - [Exceptions](docs/exceptions.md)
     - [Troubleshooting](docs/troubleshooting.md)
-    - [Upgrading from 0.0.2](docs/upgrading.md)
+    - [Upgrading](docs/upgrading.md)
     - [Testing](docs/testing.md)
 - [Design principles](#design-principles)
 - [License](#license)
@@ -166,6 +166,7 @@ $googleUser->getFirstName();     // "Ada"
 $googleUser->getLastName();      // "Lovelace"
 $googleUser->getPictureUrl();    // "https://lh3.googleusercontent.com/a/..."
 $googleUser->getHostedDomain();  // "example.com", for a Google Workspace account, or "" for a personal one
+$googleUser->getClaims();        // every claim in the ID token, as an array, including any without a getter
 ```
 
 Google leaves out the name and picture for some accounts, in which case they are empty strings. See
@@ -277,7 +278,7 @@ the exceptions it can throw.
 - [Caching Google's certificates](docs/caching.md)
 - [Exceptions](docs/exceptions.md): what each one means, and what to tell the user.
 - [Troubleshooting](docs/troubleshooting.md): `redirect_uri_mismatch`, `invalid_grant`, CSRF errors, and others.
-- [Upgrading from 0.0.2](docs/upgrading.md)
+- [Upgrading](docs/upgrading.md)
 - [Testing](docs/testing.md): running the package's own tests.
 
 ## Design principles
@@ -285,7 +286,8 @@ the exceptions it can throw.
   left to you is whether an unverified email address is acceptable, as that depends on what you do with it (see
   [Security](docs/security.md)).
 - **Failures throw.** Methods throw a specific exception if something goes wrong, rather than returning `false` or
-  `null`, or giving you a PHP warning and a half-filled object.
+  `null`, or giving you a PHP warning and a half-filled object. Every exception the package throws extends
+  `ExceptionGoogleSso`, so you can catch them all at once.
 - **Asks for as little as possible.** Only the `openid`, `email` and `profile` scopes are requested, and no offline
   access, so the user sees the smallest consent screen Google has.
 - **Minimal dependencies.** Just the PSR interfaces and `firebase/php-jwt`. You bring your own HTTP client and cache.

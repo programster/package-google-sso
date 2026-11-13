@@ -17,12 +17,14 @@ final readonly class TestSigningKey
     # The key ID, which Google puts in each ID token's header, so the right certificate can be found.
     public const KEY_ID = "test-key-1";
 
+    private string $m_keyId;
     private string $m_privateKeyPem;
     private string $m_jwks;
 
 
-    private function __construct(string $privateKeyPem, string $jwks)
+    private function __construct(string $keyId, string $privateKeyPem, string $jwks)
     {
+        $this->m_keyId = $keyId;
         $this->m_privateKeyPem = $privateKeyPem;
         $this->m_jwks = $jwks;
     }
@@ -47,9 +49,10 @@ final readonly class TestSigningKey
 
     /**
      * Generate a new key, e.g. to sign a token with a key that Google's certificates don't include.
+     * @param string $keyId - the key's ID, e.g. a different one, for a key Google has rotated to.
      * @return TestSigningKey
      */
-    public static function create() : TestSigningKey
+    public static function create(string $keyId = self::KEY_ID) : TestSigningKey
     {
         $key = openssl_pkey_new(['private_key_bits' => 2048, 'private_key_type' => OPENSSL_KEYTYPE_RSA]);
         openssl_pkey_export($key, $privateKeyPem);
@@ -59,12 +62,12 @@ final readonly class TestSigningKey
             'kty' => 'RSA',
             'alg' => 'RS256',
             'use' => 'sig',
-            'kid' => self::KEY_ID,
+            'kid' => $keyId,
             'n' => self::base64UrlEncode($rsaDetails['n']),
             'e' => self::base64UrlEncode($rsaDetails['e']),
         ];
 
-        return new TestSigningKey($privateKeyPem, json_encode(['keys' => [$jwk]], JSON_THROW_ON_ERROR));
+        return new TestSigningKey($keyId, $privateKeyPem, json_encode(['keys' => [$jwk]], JSON_THROW_ON_ERROR));
     }
 
 
@@ -75,7 +78,7 @@ final readonly class TestSigningKey
      */
     public function signIdToken(array $claims) : string
     {
-        return JWT::encode($claims, $this->m_privateKeyPem, 'RS256', self::KEY_ID);
+        return JWT::encode($claims, $this->m_privateKeyPem, 'RS256', $this->m_keyId);
     }
 
 
@@ -86,5 +89,6 @@ final readonly class TestSigningKey
 
 
     # Accessors
+    public function getKeyId() : string { return $this->m_keyId; }
     public function getJwks() : string { return $this->m_jwks; }
 }

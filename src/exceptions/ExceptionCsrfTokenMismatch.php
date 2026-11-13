@@ -4,7 +4,7 @@ declare(strict_types = 1);
 
 namespace Programster\GoogleSso\Exceptions;
 
-class ExceptionCsrfTokenMismatch extends \Exception
+class ExceptionCsrfTokenMismatch extends ExceptionGoogleSso
 {
     private readonly string $m_googleResponseStateToken;
     private readonly string $m_cachedStateToken;

@@ -45,7 +45,23 @@ final class FakeGoogleHttpClient implements ClientInterface
      */
     public static function issuingIdToken(array $claims) : FakeGoogleHttpClient
     {
-        $idToken = TestSigningKey::get()->signIdToken($claims);
+        return self::issuingIdTokenSignedWith(TestSigningKey::get(), $claims);
+    }
+
+
+    /**
+     * Create a fake Google that issues an ID token signed with the given key, while its certificates endpoint still
+     * serves TestSigningKey::get()'s certificates, e.g. to forge a token, or sign one with a key it doesn't publish.
+     *
+     * @param TestSigningKey $signingKey - the key to sign the ID token with.
+     *
+     * @param array<string, mixed> $claims - the claims, e.g. from TestFixtures::validClaims().
+     *
+     * @return FakeGoogleHttpClient
+     */
+    public static function issuingIdTokenSignedWith(TestSigningKey $signingKey, array $claims) : FakeGoogleHttpClient
+    {
+        $idToken = $signingKey->signIdToken($claims);
         $body = json_encode(['access_token' => 'test-access-token', 'id_token' => $idToken], JSON_THROW_ON_ERROR);
         return self::respondingToTokenRequestsWith(new Response(200, ['Content-Type' => 'application/json'], $body));
     }

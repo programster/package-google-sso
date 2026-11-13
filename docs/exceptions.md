@@ -7,8 +7,12 @@
 
 ## Catching them
 Methods throw an exception when something goes wrong, rather than returning `false` or `null`. The package's own
-exceptions are in the `Programster\GoogleSso\Exceptions` namespace, and extend `\Exception`. Most apps only need to
-treat one of them specially, the user cancelling, and log the rest:
+exceptions are in the `Programster\GoogleSso\Exceptions` namespace, and all extend the abstract `ExceptionGoogleSso`
+(which extends `\Exception`), so you can catch them all at once. Exceptions from the libraries the package uses, such
+as php-jwt's `ExpiredException` or your HTTP client's, are passed on as they are, so they don't extend it (see
+[Exceptions from elsewhere](#exceptions-from-elsewhere)).
+
+Most apps only need to treat one exception specially, the user cancelling, and log the rest:
 
 ```php
 use Programster\GoogleSso\Exceptions\ExceptionGoogleLoginError;
@@ -31,7 +35,8 @@ catch (\Exception $e)
 ```
 
 ## The package's exceptions
-Those indented extend the one above them, so catching that one catches them too.
+All of these extend `ExceptionGoogleSso`, which is never thrown itself. Those indented also extend the one above them,
+so catching that one catches them too.
 
 | Exception | Thrown when | Extra methods |
 |---|---|---|
@@ -52,7 +57,7 @@ Some exceptions come from the libraries the package uses, and are passed on as t
 | `\Firebase\JWT\SignatureInvalidException` | The ID token's signature doesn't match any of Google's keys. |
 | `\Firebase\JWT\ExpiredException` | The ID token has expired. |
 | `\Firebase\JWT\BeforeValidException` | The ID token says it was issued in the future, usually because your server's clock is wrong (see `jwtLeewaySeconds` in [Configuration](configuration.md#jwtleewayseconds)). |
-| `\UnexpectedValueException` | The ID token is malformed, or signed with a key that isn't in Google's certificates (the three above extend it too). |
+| `\UnexpectedValueException` | The ID token is malformed, or signed with a key that isn't in Google's certificates, even after fetching them again (the three above extend it too). |
 | `\DomainException` | The ID token or certificates can't be decoded, e.g. an unsupported algorithm. |
 | `\Psr\Http\Client\ClientExceptionInterface` | The HTTP client couldn't reach Google at all, e.g. a DNS failure or timeout. |
 | `\Psr\Cache\InvalidArgumentException` | The cache pool doesn't accept the cache key (only if you changed it). |

@@ -9,7 +9,7 @@
 - [Caching Google's certificates](caching.md)
 - [Exceptions](exceptions.md)
 - [Troubleshooting](troubleshooting.md)
-- [Upgrading from 0.0.2](upgrading.md)
+- [Upgrading](upgrading.md)
 - [Testing](testing.md)
 
 For installation, a quick start, and the most common tasks, see the [main README](../README.md).

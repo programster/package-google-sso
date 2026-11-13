@@ -279,10 +279,8 @@ $smoke->run("handleGoogleSsoCallback accepts Google's issuer without https://", 
 
 $testForgedSignature = function () : void {
     # Signed by a key with the same ID as Google's, but not in Google's certificates.
-    $forgedIdToken = TestSigningKey::create()->signIdToken(TestFixtures::validClaims());
-    $body = json_encode(['access_token' => 'x', 'id_token' => $forgedIdToken]);
-    $tokenResponse = new Response(200, ['Content-Type' => 'application/json'], $body);
-    $client = TestFixtures::createClient(FakeGoogleHttpClient::respondingToTokenRequestsWith($tokenResponse));
+    $fakeGoogle = FakeGoogleHttpClient::issuingIdTokenSignedWith(TestSigningKey::create(), TestFixtures::validClaims());
+    $client = TestFixtures::createClient($fakeGoogle);
     $parameters = TestFixtures::callbackParameters(TestFixtures::startLogin($client));
 
     $handleForgedCallback = function () use ($client, $parameters) : void {
@@ -387,3 +385,44 @@ $testBadCacheEntry = function () : void {
 };
 
 $smoke->run("CacheConfig replaces a bad cache entry with freshly fetched certificates", $testBadCacheEntry);
+
+$testRotatedKey = function () : void {
+    # The cache holds Google's old certificates, from before it started signing with the current key.
+    $cachePool = new ArrayAdapter();
+    $item = $cachePool->getItem("jwtCerts");
+    $item->set(TestSigningKey::create("an-old-key")->getJwks());
+    $cachePool->save($item);
+    $fakeGoogle = FakeGoogleHttpClient::issuingIdToken(TestFixtures::validClaims());
+    $client = TestFixtures::createCachingClient($fakeGoogle, $cachePool);
+    $user = $client->handleGoogleSsoCallback(TestFixtures::callbackParameters(TestFixtures::startLogin($client)));
+    assert($user->getEmail() === 'someone@example.com', "a login with a newly rotated key should still work");
+    assert($fakeGoogle->getNumCertsRequests() === 1, "the certificates should be fetched again, once");
+    $cachedJwks = $cachePool->getItem("jwtCerts")->get();
+    assert(str_contains($cachedJwks, TestSigningKey::KEY_ID), "the fresh certificates should replace the cached ones");
+
+    # The next login finds the new key in the cache, so doesn't fetch them again.
+    $client->handleGoogleSsoCallback(TestFixtures::callbackParameters(TestFixtures::startLogin($client)));
+    assert($fakeGoogle->getNumCertsRequests() === 1, "the refreshed cache should be used for the next login");
+};
+
+$smoke->run("cached certificates are fetched again when Google has started using a new key", $testRotatedKey);
+
+$testUnknownKey = function () : void {
+    $cachePool = new ArrayAdapter();
+    $item = $cachePool->getItem("jwtCerts");
+    $item->set(TestSigningKey::get()->getJwks());
+    $cachePool->save($item);
+    $unknownKey = TestSigningKey::create("a-key-google-never-published");
+    $fakeGoogle = FakeGoogleHttpClient::issuingIdTokenSignedWith($unknownKey, TestFixtures::validClaims());
+    $client = TestFixtures::createCachingClient($fakeGoogle, $cachePool);
+    $parameters = TestFixtures::callbackParameters(TestFixtures::startLogin($client));
+
+    $handleCallback = function () use ($client, $parameters) : void {
+        $client->handleGoogleSsoCallback($parameters);
+    };
+
+    SmokeTest::expectException(\UnexpectedValueException::class, $handleCallback, '"kid" invalid');
+    assert($fakeGoogle->getNumCertsRequests() === 1, "the certificates should only be fetched again once");
+};
+
+$smoke->run("a key that isn't in Google's fresh certificates either is refused after one fetch", $testUnknownKey);

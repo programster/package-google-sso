@@ -340,7 +340,7 @@ class GoogleSsoClient
      */
     private function decodeIdToken(string $idToken) : GoogleUserData
     {
-        $keys = JWK::parseKeySet($this->getGoogleJwtCertKeys());
+        $keys = JWK::parseKeySet($this->getGoogleJwtCertKeys(self::getKeyId($idToken)));
 
         // php-jwt's leeway is static, so put it back afterwards, rather than changing it for the rest of the process
         $previousLeeway = JWT::$leeway;
@@ -371,8 +371,11 @@ class GoogleSsoClient
 
 
     /**
-     * Get the key set for the JWT certificates that we should use to verify the ID token. This method will fetch
-     * the data from Google if no cache system is enabled, or if the cached value has expired.
+     * Get Google's certificates, to check the ID token's signature with. They come from the cache, if there is one, and
+     * it has the key the ID token was signed with. Otherwise, they are fetched from Google (and cached), which picks up
+     * a key that Google has started using since they were cached, rather than refusing logins until the cache expires.
+     *
+     * @param string $keyId - the ID of the key the ID token was signed with (its "kid"), or "" if it doesn't say.
      *
      * @return array<string, mixed> - the decoded JWK set.
      *
@@ -380,32 +383,67 @@ class GoogleSsoClient
      * @throws \Psr\Cache\InvalidArgumentException
      * @throws \Psr\Http\Client\ClientExceptionInterface
      */
-    private function getGoogleJwtCertKeys() : array
+    private function getGoogleJwtCertKeys(string $keyId) : array
     {
-        if ($this->m_cacheConfig === null)
+        $cachedKeySet = $this->getCachedGoogleJwtCertKeys();
+
+        # A token that doesn't say which key it was signed with can't be helped by fetching them again.
+        $canUseCache = (
+               $cachedKeySet !== []
+            && ($keyId === "" || self::keySetHasKey($cachedKeySet, $keyId))
+        );
+
+        if ($canUseCache)
         {
-            $keySet = $this->fetchGoogleJwtCertKeys();
+            $keySet = $cachedKeySet;
         }
         else
         {
-            $cachePool = $this->m_cacheConfig->getCacheItemPool();
-            $item = $cachePool->getItem($this->m_cacheConfig->getCacheKey());
-            $cachedKeySet = $item->isHit() ? self::decodeKeySet($item->get()) : [];
-
-            if ($cachedKeySet !== [])
-            {
-                $keySet = $cachedKeySet;
-            }
-            else
-            {
-                $keySet = $this->fetchGoogleJwtCertKeys();
-                $item->set(json_encode($keySet, JSON_THROW_ON_ERROR));
-                $item->expiresAfter($this->m_cacheConfig->getJwtCachePeriod());
-                $cachePool->save($item);
-            }
+            $keySet = $this->fetchGoogleJwtCertKeys();
+            $this->cacheGoogleJwtCertKeys($keySet);
         }
 
         return $keySet;
+    }
+
+
+    /**
+     * Get Google's certificates from the cache.
+     * @return array<string, mixed> - the decoded JWK set, or an empty array if there's no cache, or nothing in it.
+     * @throws \Psr\Cache\InvalidArgumentException
+     */
+    private function getCachedGoogleJwtCertKeys() : array
+    {
+        if ($this->m_cacheConfig === null)
+        {
+            $keySet = [];
+        }
+        else
+        {
+            $item = $this->m_cacheConfig->getCacheItemPool()->getItem($this->m_cacheConfig->getCacheKey());
+            $keySet = $item->isHit() ? self::decodeKeySet($item->get()) : [];
+        }
+
+        return $keySet;
+    }
+
+
+    /**
+     * Cache Google's certificates, if there is a cache.
+     * @param array<string, mixed> $keySet - the decoded JWK set, which has been checked to be valid.
+     * @return void
+     * @throws \Psr\Cache\InvalidArgumentException
+     */
+    private function cacheGoogleJwtCertKeys(array $keySet) : void
+    {
+        if ($this->m_cacheConfig !== null)
+        {
+            $cachePool = $this->m_cacheConfig->getCacheItemPool();
+            $item = $cachePool->getItem($this->m_cacheConfig->getCacheKey());
+            $item->set(json_encode($keySet, JSON_THROW_ON_ERROR));
+            $item->expiresAfter($this->m_cacheConfig->getJwtCachePeriod());
+            $cachePool->save($item);
+        }
     }
 
 
@@ -474,6 +512,43 @@ class GoogleSsoClient
         );
 
         return $isValid ? $decoded : [];
+    }
+
+
+    /**
+     * Get the ID of the key a JWT says it was signed with (the "kid" in its header), without checking anything else.
+     * @param string $jwt - the encoded JWT.
+     * @return string - the key's ID, or "" if the JWT doesn't say, or can't be read (which JWT::decode() then reports).
+     */
+    private static function getKeyId(string $jwt) : string
+    {
+        $segments = explode(".", $jwt);
+        $headerJson = (count($segments) === 3) ? JWT::urlsafeB64Decode($segments[0]) : "";
+        $header = json_decode($headerJson, true);
+        $hasKeyId = (is_array($header) && isset($header['kid']) && is_string($header['kid']));
+        return $hasKeyId ? $header['kid'] : "";
+    }
+
+
+    /**
+     * Check whether a JWK set has a key with the given ID.
+     * @param array<string, mixed> $keySet - the decoded JWK set, which has been checked to be valid.
+     * @param string $keyId - the key's ID (its "kid").
+     * @return bool
+     */
+    private static function keySetHasKey(array $keySet, string $keyId) : bool
+    {
+        $keyIds = [];
+
+        foreach ($keySet['keys'] as $key)
+        {
+            if (is_array($key) && isset($key['kid']) && is_string($key['kid']))
+            {
+                $keyIds[] = $key['kid'];
+            }
+        }
+
+        return in_array($keyId, $keyIds, true);
     }
 
 

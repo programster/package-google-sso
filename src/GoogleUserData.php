@@ -23,6 +23,8 @@ class GoogleUserData
     private readonly string $m_pictureUrl;
     private readonly int $m_expiry;
     private readonly int $m_issuedAt;
+    # Every claim in the ID token, as Google sent them (so unchecked), keyed by name. See getClaims().
+    private readonly array $m_claims;
 
 
     private function __construct(
@@ -40,6 +42,7 @@ class GoogleUserData
         string $pictureUrl,
         int $expiry,
         int $issuedAt,
+        array $claims,
     )
     {
         $this->m_iss = $iss;
@@ -56,6 +59,7 @@ class GoogleUserData
         $this->m_pictureUrl = $pictureUrl;
         $this->m_expiry = $expiry;
         $this->m_issuedAt = $issuedAt;
+        $this->m_claims = $claims;
     }
 
 
@@ -73,6 +77,9 @@ class GoogleUserData
     {
         $emailVerified = $jwt->email_verified ?? false;
 
+        # Any claims within claims (JSON objects) become arrays too, so the result is plain data all the way down.
+        $claims = json_decode(json_encode($jwt, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+
         return new GoogleUserData(
             iss: self::getRequiredString($jwt, "iss"),
             azp: self::getOptionalString($jwt, "azp"),
@@ -88,6 +95,7 @@ class GoogleUserData
             pictureUrl: self::getOptionalString($jwt, "picture"),
             expiry: self::getRequiredInt($jwt, "exp"),
             issuedAt: self::getRequiredInt($jwt, "iat"),
+            claims: $claims,
         );
     }
 
@@ -141,4 +149,5 @@ class GoogleUserData
     public function getPictureUrl() : string { return $this->m_pictureUrl; }
     public function getExpiry() : int { return $this->m_expiry; }
     public function getIssuedAt() : int { return $this->m_issuedAt; }
+    public function getClaims() : array { return $this->m_claims; }
 }

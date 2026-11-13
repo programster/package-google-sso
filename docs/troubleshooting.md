@@ -82,9 +82,14 @@ nearly always means your server's clock is wrong. Keep it in sync with NTP (e.g.
 it can't be fixed, increase `jwtLeewaySeconds` (see [Configuration](configuration.md#jwtleewayseconds)).
 
 ## UnexpectedValueException saying "kid" is invalid
-The ID token is signed with a key that isn't in the certificates you have. If you cache the certificates, Google has
-probably started using a new key since they were cached. Clearing the cache item fixes it, and caching them for less
-time stops it happening again (see [Caching](caching.md#how-long-to-cache-them-for)).
+The ID token is signed with a key that isn't in Google's certificates. The package already fetches the certificates
+again when a key isn't in the cached ones (see [Caching](caching.md#how-long-to-cache-them-for)), so this means the key
+wasn't in the freshly fetched ones either. Check:
+
+- that `googleJwtCertsUrl` hasn't been changed from its default,
+- that nothing between your server and Google (e.g. a caching proxy) is serving an old copy of the certificates,
+- that `googleOauthUrl` hasn't been changed to something other than Google, as the ID token would then not be
+  Google's.
 
 ## The login page hangs
 Your server can't reach Google, and the HTTP client has no timeout. Give it one (e.g.

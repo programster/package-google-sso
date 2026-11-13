@@ -9,6 +9,6 @@ namespace Programster\GoogleSso\Exceptions;
  * login: it was issued to a different client (aud), by someone other than Google (iss), or is missing a claim that
  * Google always includes.
  */
-class ExceptionInvalidIdToken extends \Exception
+class ExceptionInvalidIdToken extends ExceptionGoogleSso
 {
 }

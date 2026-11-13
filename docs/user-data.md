@@ -52,9 +52,21 @@ so these users can still log in. If your app needs a name, ask for one when the 
 expecting Google to have one.
 
 ## The rest of the ID token
-The package doesn't currently give you any other claims from the ID token. Google doesn't include any others in the
-token for the scopes the package asks for, and in particular, it doesn't say how the user logged in, e.g. whether they
-used two-step verification (the `amr` and `acr` claims, which some other providers include).
+`getClaims()` gives you every claim in the ID token, keyed by name, including any that have no getter of their own.
+Any claims within claims (JSON objects) are arrays too, so it is plain data all the way down:
+
+```php
+$claims = $googleUser->getClaims();
+// ['iss' => 'https://accounts.google.com', 'sub' => '110169484474386276334', 'email' => 'ada@example.com', ...]
+```
+
+The values are exactly as Google sent them, so check their types before using them. For the claims that have a
+getter, use the getter instead, as it has been checked (e.g. `getEmailVerified()` is always a `bool`).
+
+Google doesn't currently include any claims beyond those in [the table above](#the-details) for the scopes the
+package asks for. In particular, it doesn't say how the user logged in, e.g. whether they used two-step verification
+(the `amr` and `acr` claims, which some other providers include). If Google starts sending them, they will be in
+`getClaims()`, but until then, don't treat a missing `amr` as meaning anything.
 
 If you need to know that everyone logging in uses two-step verification, the way to do it with Google is to require it
 in your Google Workspace's admin console, and then only let in users from your Workspace (see

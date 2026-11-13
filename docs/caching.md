@@ -45,18 +45,18 @@ only lasts for a request (such as `ArrayAdapter`), which would fetch them on eve
 | `cacheKey` | `"jwtCerts"` | The key to keep them under in the pool. Change it if your pool already uses that key. |
 
 ## How long to cache them for
-Google changes the keys it signs ID tokens with every so often, and publishes a new key in the certificates before it
-starts using it. If you cache the certificates for too long, a login can be signed with a key that isn't in your cached
-copy, and fails (php-jwt throws an `\UnexpectedValueException` saying the `kid` is invalid) until the cache expires.
+Google changes the keys it signs ID tokens with every so often. Each ID token says which key it was signed with (its
+`kid`), so if a login is signed with a key that isn't in the cached certificates, the package fetches them from Google
+again (once), and caches the new ones. So logins keep working when Google changes its keys, however long you cache
+the certificates for.
 
-Google's own response says how long the certificates may be cached for, in its `Cache-Control` header's `max-age`,
-which is usually around seven hours. The default of 6 hours stays under that, so a new key is picked up soon after
-Google publishes it. Avoid caching them for longer than Google allows. Caching them for less time is always safe,
-and only costs an extra request to Google now and again. If you see the "invalid kid" error after Google has changed
-its keys, clearing the cache item fixes it straight away.
+The default of 6 hours stays under the `max-age` that Google's own response allows (usually around seven hours), so
+that a key Google stops using is soon dropped from the cache too. There's rarely a reason to change it. Caching them
+for less time is always safe, and only costs an extra request to Google now and again.
 
 ## What is cached
 Only the certificates, as JSON, under the cache key. Nothing about any user is ever cached. The certificates are only
 cached once they have been fetched, and checked to be a valid set of keys, so an error from Google (e.g. a `503`) is
 never cached. If the cache holds something that isn't a valid set of keys (e.g. left by an older version of this
-package, which cached whatever it got), it is fetched again and replaced.
+package, which cached whatever it got), or doesn't have the key a login was signed with, they are fetched again, and
+the cached copy is replaced.

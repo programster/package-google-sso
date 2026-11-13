@@ -7,7 +7,7 @@ namespace Programster\GoogleSso\Exceptions;
 use Psr\Http\Message\ResponseInterface;
 
 
-class ExceptionUnexpectedResponse extends \Exception
+class ExceptionUnexpectedResponse extends ExceptionGoogleSso
 {
     private readonly ResponseInterface $m_response;
 

@@ -48,7 +48,9 @@ The package uses OpenID Connect's "authorization code" flow, which is what Googl
 5. `handleGoogleSsoCallback()` takes the token out of the session, and checks the `state` matches it.
 6. It sends the code, along with your client ID and secret, to Google's token endpoint, which returns an ID token.
    This is a JWT (a signed JSON object) of "claims" about the user.
-7. It gets Google's public certificates, from the cache if you have configured one.
+7. It gets Google's public certificates, from the cache if you have configured one, and it has the key the ID token
+   was signed with. Otherwise, it fetches them from Google, which picks up a key Google has started using since they
+   were cached.
 8. It checks the ID token (see below), and returns its claims as a `GoogleUserData`.
 
 The ID token comes from Google directly, over HTTPS, in step 6, rather than through the browser, so the user can't
