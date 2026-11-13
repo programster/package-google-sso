@@ -12,6 +12,7 @@ Google SSO
     - [Match users to accounts safely](#match-users-to-accounts-safely)
     - [Only allow your Google Workspace domain](#only-allow-your-google-workspace-domain)
     - [Handle a cancelled login](#handle-a-cancelled-login)
+    - [Always ask which Google account to use](#always-ask-which-google-account-to-use)
     - [Use it with Slim or another PSR-7 framework](#use-it-with-slim-or-another-psr-7-framework)
     - [Cache Google's certificates](#cache-googles-certificates)
     - [Put several "Login with Google" buttons on a page](#put-several-login-with-google-buttons-on-a-page)
@@ -19,6 +20,7 @@ Google SSO
     - [Setting up Google](docs/google-setup.md)
     - [How it works](docs/how-it-works.md)
     - [Configuration](docs/configuration.md)
+    - [Login options (`prompt`, `hd`, `login_hint`)](docs/login-options.md)
     - [The user's details (`GoogleUserData`)](docs/user-data.md)
     - [Frameworks and sessions](docs/frameworks.md)
     - [Security](docs/security.md)
@@ -199,8 +201,11 @@ if ($googleUser->getHostedDomain() !== "example.com")
 }
 ```
 
-If your Google Cloud project belongs to your Workspace, you can also make the app "Internal" in Google's settings, so
-that Google itself refuses anyone else. See [Setting up Google](docs/google-setup.md#internal-or-external).
+To make it easier for them, you can also ask Google to offer your Workspace's accounts first, with
+`createGoogleSsoLoginUrl(hostedDomainHint: "example.com")`, but that is only a hint, so keep the check (see
+[Login options](docs/login-options.md#suggesting-a-workspace-domain-hd)). If your Google Cloud project belongs to your
+Workspace, you can also make the app "Internal" in Google's settings, so that Google itself refuses anyone else. See
+[Setting up Google](docs/google-setup.md#internal-or-external).
 
 ### Handle a cancelled login
 If the user cancels at Google, or declines to share their details, `handleGoogleSsoCallback()` throws
@@ -216,6 +221,18 @@ catch (ExceptionGoogleLoginError $e)
     $message = $e->isAccessDenied() ? "You cancelled the login." : "Google couldn't log you in ({$e->getError()}).";
 }
 ```
+
+### Always ask which Google account to use
+People are often logged in to several Google accounts, and by default, Google may pick one without asking. To always
+ask which account to use:
+
+```php
+use Programster\GoogleSso\LoginPromptEnum;
+
+$loginUrl = $googleSso->createGoogleSsoLoginUrl(prompt: LoginPromptEnum::SELECT_ACCOUNT);
+```
+
+`sendUserToGoogleLogin()` takes the same options. See [Login options](docs/login-options.md) for the others.
 
 ### Use it with Slim or another PSR-7 framework
 `sendUserToGoogleLogin()` sends a header and exits, so in a framework where you return a response, redirect to
@@ -272,6 +289,7 @@ the exceptions it can throw.
 - [How it works](docs/how-it-works.md): what happens between the user clicking "Login with Google" and you getting their
   details, and what is checked along the way.
 - [Configuration](docs/configuration.md): every constructor option.
+- [Login options](docs/login-options.md): always asking which account to use, and suggesting a domain or account.
 - [The user's details](docs/user-data.md): everything in `GoogleUserData`, and which details can be empty.
 - [Frameworks and sessions](docs/frameworks.md): Slim, Laravel, Symfony, and long-running servers.
 - [Security](docs/security.md): matching users to accounts, sessions, and what this package does and doesn't do for you.

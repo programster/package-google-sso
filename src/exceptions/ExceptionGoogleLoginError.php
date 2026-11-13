@@ -35,6 +35,26 @@ class ExceptionGoogleLoginError extends ExceptionGoogleSso
     }
 
 
+    /**
+     * Find out if Google couldn't log the user in without them doing something (logging in, choosing an account, or
+     * agreeing to share their details), which only happens with LoginPromptEnum::NONE. Send them to log in normally.
+     *
+     * @return bool - true if the error was "login_required", "consent_required", "interaction_required" or
+     * "account_selection_required".
+     */
+    public function isInteractionRequired() : bool
+    {
+        $interactionErrors = [
+            "login_required",
+            "consent_required",
+            "interaction_required",
+            "account_selection_required",
+        ];
+
+        return in_array($this->m_error, $interactionErrors, true);
+    }
+
+
     # Accessors
     public function getError() : string { return $this->m_error; }
 }
