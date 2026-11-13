@@ -42,8 +42,8 @@ only lasts for a request (such as `ArrayAdapter`), which would fetch them on eve
 | Option | Default | What it is |
 |---|---|---|
 | `cacheItemPool` | (required) | The PSR-6 pool to keep the certificates in. |
-| `jwtCachePeriod` | `21600` (6 hours) | How many seconds to keep them for. |
-| `cacheKey` | `"jwtCerts"` | The key to keep them under in the pool. Change it if your pool already uses that key. |
+| `jwtCachePeriod` | `21600` (6 hours) | How many seconds to keep them for. Must be at least `1`. |
+| `cacheKey` | `"jwtCerts"` | The key to keep them under in the pool. Change it if your pool already uses that key. It can't be empty, or have any of the characters PSR-6 reserves: `{}()/\@:`. |
 
 ## How long to cache them for
 Google changes the keys it signs ID tokens with every so often. Each ID token says which key it was signed with (its

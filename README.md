@@ -46,7 +46,8 @@ checks:
 - that the code Google gives back can only be used for this login, with PKCE,
 - that the ID token really came from Google, by checking its signature against Google's published certificates,
 - that it was issued to *your* app, rather than to some other app the user logged in to (the `aud` claim),
-- that it was issued by Google (the `iss` claim), and hasn't expired, allowing for a little clock difference.
+- that it was issued by Google (the `iss` claim), and hasn't expired, allowing for a little clock difference,
+- that Google has verified the user's email address, so it can't be used to get into someone else's account.
 
 Anything that goes wrong, from the user cancelling to Google returning an error, throws a specific exception, so you
 can tell the user what happened.
@@ -318,9 +319,9 @@ the exceptions it can throw.
 - [Testing](docs/testing.md): running the package's own tests.
 
 ## Design principles
-- **Safe by default.** Everything a login needs checking is checked, without you having to remember to. The one thing
-  left to you is whether an unverified email address is acceptable, as that depends on what you do with it (see
-  [Security](docs/security.md)).
+- **Safe by default.** Everything a login needs checking is checked, without you having to remember to, including
+  that Google has verified the user's email address. Anything less safe, such as letting in users whose address isn't
+  verified, needs you to ask for it (see [Security](docs/security.md)).
 - **Failures throw.** Methods throw a specific exception if something goes wrong, rather than returning `false` or
   `null`, or giving you a PHP warning and a half-filled object. Every exception the package throws extends
   `ExceptionGoogleSso`, so you can catch them all at once.

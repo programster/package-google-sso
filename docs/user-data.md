@@ -13,7 +13,7 @@ changed once created.
 | Method | Claim | Example | Notes |
 |---|---|---|---|
 | `getSub()` | `sub` | `"110169484474386276334"` | The user's Google ID. Unique, and never changes or is reused. |
-| `getEmail()` | `email` | `"ada@example.com"` | Their email address. It can change, and may not have been verified. |
+| `getEmail()` | `email` | `"ada@example.com"` | Their email address. It can change. Google has verified it, unless you pass `UnverifiedEmailPolicyEnum::ALLOW`. |
 | `getEmailVerified()` | `email_verified` | `true` | Whether Google has verified that they own the address. |
 | `getHostedDomain()` | `hd` | `"example.com"` | The Google Workspace domain the account belongs to, or `""` for a personal account. |
 | `getFullName()` | `name` | `"Ada Lovelace"` | Can be `""`. |

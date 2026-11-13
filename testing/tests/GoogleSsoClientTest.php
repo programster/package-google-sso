@@ -124,6 +124,7 @@ $testWrongState = function () : void {
 
     $exception = SmokeTest::expectException(ExceptionCsrfTokenMismatch::class, $callbackWithWrongState);
     assert(!($exception instanceof ExceptionMissingCsrfToken));
+    assert($exception->getGoogleResponseToken() === strrev($state) && $exception->getCachedStateToken() === $state);
     assert(!isset($_SESSION[TestFixtures::SESSION_KEY]), "a failed check should use up the state too");
     assert($fakeGoogle->getNumTokenRequests() === 0, "the code shouldn't be sent to Google");
 };
@@ -139,6 +140,8 @@ $testNoSessionToken = function () : void {
 
     $exception = SmokeTest::expectException(ExceptionMissingCsrfToken::class, $callbackWithoutLogin);
     assert($exception instanceof ExceptionCsrfTokenMismatch, "it should still be caught as a CSRF mismatch");
+    assert($exception->getGoogleResponseToken() === "a-state-we-never-issued");
+    assert($exception->getCachedStateToken() === "", "there was no stored token");
 };
 
 $smoke->run("handleGoogleSsoCallback refuses a callback when the session has no state", $testNoSessionToken);

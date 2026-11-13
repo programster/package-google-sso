@@ -3,7 +3,7 @@
 /*
  * Runs the smoke tests in testing/tests/, which log in against a fake Google, and check the
  * results and failures of (nearly) every public method in the library. It reports any test that
- * fails, throws an error, or raises a warning/deprecation. There is one file of tests per class,
+ * fails, throws an error, or raises a warning/deprecation. There is one file of tests per class or feature,
  * e.g. GoogleSsoClientTest.php. This is used by run-all-php-versions.sh to check the library works
  * on every supported version of PHP, but it can also be run directly: php testing/main.php
  * Exits with 0 if everything passed, or 1 if anything failed.
@@ -27,6 +27,10 @@ if (ini_get('zend.assertions') !== '1' && @ini_set('zend.assertions', '1') === f
 
 ini_set('assert.exception', '1');
 
+# NativeSessionCsrfTokenStore needs a started session, which PHP only allows before anything is output. It is never
+# saved: each test gets an empty $_SESSION, and the session is thrown away at the end.
+session_start(['use_cookies' => 0, 'use_only_cookies' => 1, 'cache_limiter' => '']);
+
 $smoke = new SmokeTest();
 $testFiles = glob(__DIR__ . '/tests/*Test.php');
 sort($testFiles);
@@ -37,6 +41,7 @@ foreach ($testFiles as $testFile)
 }
 
 $failures = $smoke->getFailures();
+session_abort();
 
 # With GOOGLESSO_TEST_ONLY, a name that matches nothing would otherwise pass without checking anything.
 $only = getenv("GOOGLESSO_TEST_ONLY");

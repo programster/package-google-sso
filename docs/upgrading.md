@@ -43,6 +43,12 @@ Then:
 - **The constructor's options are in a new order**: `csrfTokenStore`, `mfaPolicy` and `jwtLeewaySeconds` now come
   straight after `cacheConfig`, before the two URLs. Code that uses named arguments, as the docs do, isn't affected.
   Code that passes them by position fails with a `TypeError`, rather than putting a value in the wrong place.
+- **The default CSRF token store needs a started session.** If `session_start()` hasn't been called, creating the
+  login URL or handling the callback throws a `\LogicException`, rather than the login failing later with an
+  `ExceptionMissingCsrfToken`. A site that logs in successfully today already starts its session, so isn't affected.
+- **`CacheConfig` checks its options when it's created.** A `jwtCachePeriod` below 1 second (which never cached
+  anything), or a `cacheKey` that is empty or has a character PSR-6 reserves (`{}()/\@:`), throws an
+  `\InvalidArgumentException`.
 - **The classes are `final`**: `GoogleSsoClient`, `GoogleUserData`, `CacheConfig`, and every exception except
   `ExceptionCsrfTokenMismatch` (which `ExceptionMissingCsrfToken` extends) and the abstract `ExceptionGoogleSso`.
   `GoogleSsoClient`, `GoogleUserData` and `CacheConfig` are also `readonly`. If you extended one, wrap it in a class of

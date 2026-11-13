@@ -66,7 +66,15 @@ $smoke->run("createGoogleSsoLoginUrl sends the hosted domain and login hints it 
 $testBadDomainHints = function () : void {
     $client = TestFixtures::createClient(FakeGoogleHttpClient::issuingIdToken(TestFixtures::validClaims()));
 
-    $badHints = ["@example.com", "https://example.com", "example.com/", "example", "ada@example.com", " example.com"];
+    $badHints = [
+        "@example.com",
+        "https://example.com",
+        "example.com/",
+        "example",
+        "ada@example.com",
+        " example.com",
+        "example.com\n",
+    ];
 
     foreach ($badHints as $bad)
     {

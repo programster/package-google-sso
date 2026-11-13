@@ -49,7 +49,12 @@ so catching that one catches them too.
 | `ExceptionUnverifiedEmail` | Google hasn't verified that the user owns their email address. Not thrown if you pass `UnverifiedEmailPolicyEnum::ALLOW` to the callback. | `getEmail()` |
 | `ExceptionMfaRequired` | With `MfaPolicyEnum::REQUIRE`, Google doesn't say the user signed in with multi-factor authentication, or doesn't say how they signed in at all. | `getAuthenticationMethods()` |
 
-The constructor also throws `\InvalidArgumentException` if `jwtLeewaySeconds` is negative.
+`\InvalidArgumentException` is thrown for a mistake in your code, as soon as you make it: by the constructor if
+`jwtLeewaySeconds` is negative, by `CacheConfig` for a cache period below 1 second or a cache key PSR-6 doesn't allow,
+and by `createGoogleSsoLoginUrl()` for a `hostedDomainHint` that isn't a domain (see
+[Login options](login-options.md#suggesting-a-workspace-domain-hd)). Likewise, the default CSRF token store throws a
+`\LogicException` if `session_start()` hasn't been called (see
+[Troubleshooting](troubleshooting.md#logicexception-saying-the-session-hasnt-been-started)).
 
 ## Exceptions from elsewhere
 Some exceptions come from the libraries the package uses, and are passed on as they are:
@@ -62,6 +67,7 @@ Some exceptions come from the libraries the package uses, and are passed on as t
 | `\UnexpectedValueException` | The ID token is malformed, or signed with a key that isn't in Google's certificates, even after fetching them again (the three above extend it too). |
 | `\DomainException` | The ID token or certificates can't be decoded, e.g. an unsupported algorithm. |
 | `\Psr\Http\Client\ClientExceptionInterface` | The HTTP client couldn't reach Google at all, e.g. a DNS failure or timeout. |
+| `\InvalidArgumentException` | One of Google's certificates can't be read by php-jwt, e.g. it is missing a field. |
 | `\Psr\Cache\InvalidArgumentException` | The cache pool doesn't accept the cache key (only if you changed it). |
 | `\Random\RandomException` | `createGoogleSsoLoginUrl()` couldn't get random bytes for the CSRF token, which only happens if the system has no source of randomness. |
 

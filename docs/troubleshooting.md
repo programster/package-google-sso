@@ -2,6 +2,7 @@
 
 - [Google shows "Error 400: redirect_uri_mismatch"](#google-shows-error-400-redirect_uri_mismatch)
 - [Google shows "Access blocked" or "This app is blocked"](#google-shows-access-blocked-or-this-app-is-blocked)
+- [LogicException saying the session hasn't been started](#logicexception-saying-the-session-hasnt-been-started)
 - [ExceptionMissingCsrfToken on every login](#exceptionmissingcsrftoken-on-every-login)
 - [ExceptionMissingCsrfToken now and again](#exceptionmissingcsrftoken-now-and-again)
 - [ExceptionCsrfTokenMismatch](#exceptioncsrftokenmismatch)
@@ -29,11 +30,15 @@ came out as `http://` or with an internal host name. Set `googleCallbackUrl` fro
 - If the app is **Internal**, only users in your organisation can log in.
 - A Google Workspace admin can block apps for their users. The user's admin would need to allow it.
 
+## LogicException saying the session hasn't been started
+With the default CSRF token store, call `session_start()` before both creating the login URL and handling the
+callback. Without it, the token would be put in a `$_SESSION` that is never saved, so the store throws straight away
+instead. If your framework has its own session (e.g. Laravel), give the client a store that uses it (see
+[Frameworks and sessions](frameworks.md)).
+
 ## ExceptionMissingCsrfToken on every login
 The session that `createGoogleSsoLoginUrl()` put the CSRF token in isn't there when Google sends the user back. Check:
 
-- **`session_start()` is called before both** creating the login URL and handling the callback. Without it, the token
-  is put in a `$_SESSION` array that is never saved.
 - **The session cookie isn't `SameSite=Strict`**. Browsers don't send `Strict` cookies when coming from another site,
   as the callback does. Use `Lax` (see [Frameworks and sessions](frameworks.md#the-session-cookie)).
 - **The login and the callback are on the same host.** A session cookie for `www.example.com` isn't sent to

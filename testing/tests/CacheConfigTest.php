@@ -8,6 +8,7 @@
 declare(strict_types = 1);
 
 use Programster\GoogleSso\CacheConfig;
+use Programster\GoogleSso\Testing\SmokeTest;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 
 /** @var \Programster\GoogleSso\Testing\SmokeTest $smoke */
@@ -29,3 +30,25 @@ $testOptions = function () : void {
 };
 
 $smoke->run("CacheConfig keeps the options it is given", $testOptions);
+
+$testBadOptions = function () : void {
+    foreach ([0, -1] as $period)
+    {
+        $createWithBadPeriod = function () use ($period) : void {
+            new CacheConfig(new ArrayAdapter(), jwtCachePeriod: $period);
+        };
+
+        SmokeTest::expectException(\InvalidArgumentException::class, $createWithBadPeriod, "at least 1 second");
+    }
+
+    foreach (["", "jwt:certs", "jwt/certs", "{jwtCerts}", "jwt@certs"] as $key)
+    {
+        $createWithBadKey = function () use ($key) : void {
+            new CacheConfig(new ArrayAdapter(), cacheKey: $key);
+        };
+
+        SmokeTest::expectException(\InvalidArgumentException::class, $createWithBadKey, "cache key");
+    }
+};
+
+$smoke->run("CacheConfig refuses a period that would never cache, and keys PSR-6 doesn't allow", $testBadOptions);
