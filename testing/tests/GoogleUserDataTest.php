@@ -6,6 +6,7 @@
 
 declare(strict_types = 1);
 
+use Programster\GoogleSso\AuthenticationMethodEnum;
 use Programster\GoogleSso\Exceptions\ExceptionInvalidIdToken;
 use Programster\GoogleSso\GoogleUserData;
 use Programster\GoogleSso\Testing\SmokeTest;
@@ -114,3 +115,54 @@ $testGetClaims = function () : void {
 };
 
 $smoke->run("getClaims gives every claim in the ID token, as plain data", $testGetClaims);
+
+$testAuthenticationMethods = function () : void {
+    $authTime = time() - 600;
+    $claims = TestFixtures::validClaims(['amr' => ["pwd", "mfa", "new-method", 7], 'auth_time' => $authTime]);
+    $user = GoogleUserData::createFromJwt((object)$claims);
+    assert($user->getAuthenticationMethods() === ["pwd", "mfa", "new-method"], "only strings should be kept");
+    assert($user->getAuthTime() === $authTime);
+    assert($user->hasAuthenticationMethod(AuthenticationMethodEnum::PASSWORD));
+    assert(!$user->hasAuthenticationMethod(AuthenticationMethodEnum::SMS));
+    assert($user->hasMultiFactorAuthentication());
+
+    $passwordOnly = GoogleUserData::createFromJwt((object)TestFixtures::validClaims(['amr' => ["pwd", "sms"]]));
+    assert(!$passwordOnly->hasMultiFactorAuthentication(), "a password and text message isn't counted as MFA");
+
+    foreach ([AuthenticationMethodEnum::HARDWARE_KEY, AuthenticationMethodEnum::SOFTWARE_KEY] as $key)
+    {
+        $keyUser = GoogleUserData::createFromJwt((object)TestFixtures::validClaims(['amr' => [$key->value]]));
+        assert($keyUser->hasMultiFactorAuthentication(), "{$key->name} should count as MFA");
+    }
+};
+
+$smoke->run("createFromJwt reads the amr and auth_time claims", $testAuthenticationMethods);
+
+$testAuthenticationMethodsMissing = function () : void {
+    $user = GoogleUserData::createFromJwt((object)TestFixtures::validClaims());
+    assert($user->getAuthenticationMethods() === [] && $user->getAuthTime() === 0);
+    assert(!$user->hasMultiFactorAuthentication(), "a missing amr claim must never count as MFA");
+
+    $badClaims = TestFixtures::validClaims(['amr' => "mfa", 'auth_time' => "yesterday"]);
+    $badUser = GoogleUserData::createFromJwt((object)$badClaims);
+    assert($badUser->getAuthenticationMethods() === [] && $badUser->getAuthTime() === 0, "malformed claims ignored");
+    assert(!$badUser->hasMultiFactorAuthentication(), "amr that isn't a list must never count as MFA");
+};
+
+$smoke->run("createFromJwt treats missing or malformed amr and auth_time as unsent", $testAuthenticationMethodsMissing);
+
+$testMultiFactorMethods = function () : void {
+    $multiFactor = [];
+
+    foreach (AuthenticationMethodEnum::cases() as $method)
+    {
+        if ($method->isMultiFactor())
+        {
+            $multiFactor[] = $method->value;
+        }
+    }
+
+    assert($multiFactor === ["mfa", "hwk", "swk"], "unexpected multi-factor methods: " . implode(", ", $multiFactor));
+};
+
+$smoke->run("AuthenticationMethodEnum counts mfa, hwk and swk as multi-factor", $testMultiFactorMethods);

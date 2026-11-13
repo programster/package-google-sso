@@ -66,14 +66,15 @@ If your Google Cloud project belongs to your organisation, you can also make the
 Keeping the check in your code as well means it still holds if that setting is ever changed.
 
 ## Two-step verification
-Google's ID tokens don't say how the user logged in, so the package can't tell you whether they used two-step
-verification. If you need everyone to use it:
+Google can now say how the user signed in to their Google account, in the `amr` claim (see
+[How the user signed in to Google](user-data.md#how-the-user-signed-in-to-google)). It only sends it when the login
+asks for it, which this version of the package doesn't do yet, so it can't tell you whether they used two-step
+verification yet. If you need everyone to use it now:
 
 1. Require two-step verification for your organisation, in the Google Workspace admin console.
 2. Only let in users from your Workspace, as above.
 
-Then Google won't let anyone log in to those accounts without it. This only works for accounts your Workspace manages:
-there's no way to require it for personal Google accounts.
+Then Google won't let anyone log in to those accounts without it. This only works for accounts your Workspace manages.
 
 ## After the login
 The package checks the login, but logging the user in to your site is up to you:

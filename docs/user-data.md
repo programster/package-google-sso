@@ -3,6 +3,7 @@
 - [The details](#the-details)
 - [Which to use for what](#which-to-use-for-what)
 - [Details that can be empty](#details-that-can-be-empty)
+- [How the user signed in to Google](#how-the-user-signed-in-to-google)
 - [The rest of the ID token](#the-rest-of-the-id-token)
 
 ## The details
@@ -22,6 +23,8 @@ changed once created.
 | `getIss()` | `iss` | `"https://accounts.google.com"` | Who issued the token, which has been checked to be Google. |
 | `getAud()` | `aud` | `"1234-abc.apps.googleusercontent.com"` | Who the token is for, which has been checked to be your client ID. |
 | `getAzp()` | `azp` | `"1234-abc.apps.googleusercontent.com"` | The client that asked for the token. Usually the same as `aud`. Can be `""`. |
+| `getAuthenticationMethods()` | `amr` | `["pwd", "mfa"]` | How they last signed in to Google. Often `[]`. See [below](#how-the-user-signed-in-to-google). |
+| `getAuthTime()` | `auth_time` | `1762416000` | When they last signed in to Google, as a Unix timestamp. Often `0`. See [below](#how-the-user-signed-in-to-google). |
 | `getAtHash()` | `at_hash` | `"HK6E_P6Dh8Y93mRNtsDB1Q"` | A hash of the access token. Can be `""`. |
 | `getIssuedAt()` | `iat` | `1763020800` | When the token was issued, as a Unix timestamp. |
 | `getExpiry()` | `exp` | `1763024400` | When the token expires, as a Unix timestamp, an hour after it was issued. |
@@ -51,6 +54,40 @@ an account without one, and the hosted domain for a personal account. Those gett
 so these users can still log in. If your app needs a name, ask for one when the account is first created, rather than
 expecting Google to have one.
 
+## How the user signed in to Google
+Google can say how the user last signed in to their Google account (the `amr` claim), and when (`auth_time`), e.g.
+whether they used two-step verification or a passkey:
+
+```php
+use Programster\GoogleSso\AuthenticationMethodEnum;
+
+$googleUser->hasMultiFactorAuthentication();                              // true for mfa, hwk or swk
+$googleUser->hasAuthenticationMethod(AuthenticationMethodEnum::PASSWORD); // true if a password was used
+$googleUser->getAuthTime();                                               // when, e.g. 1762416000
+```
+
+| `AuthenticationMethodEnum` | `amr` value | Meaning | Counts as multi-factor |
+|---|---|---|---|
+| `PASSWORD` | `pwd` | A password was used. | No |
+| `MULTI_FACTOR` | `mfa` | A multi-factor challenge was completed. | Yes |
+| `HARDWARE_KEY` | `hwk` | A hardware security key was used. | Yes |
+| `SOFTWARE_KEY` | `swk` | A software key, such as a passkey, was used. | Yes |
+| `SMS` | `sms` | A text message was used for verification. | No |
+| `PHONE_CALL` | `tel` | A phone call was used for verification. | No |
+
+Before relying on them, know that:
+
+- **Google only sends them when the login asks for them**, and only to apps that are published, verified, and have
+  "Authentication strength claims" and "Session age claims" turned on (see Google's
+  [security bundle](https://developers.google.com/identity/siwg/security-bundle)). This version of the package doesn't
+  ask for them yet, so they are empty (`[]` and `0`) for now.
+- **They can be missing even then**, as Google only sends `amr` when it knows how the user signed in. A missing claim
+  is never counted as multi-factor authentication: `hasMultiFactorAuthentication()` is `false`.
+- **They describe the user's last sign-in to Google, not this login to your site.** Someone who signed in to Google with
+  a passkey a month ago, and has stayed signed in since, still has `swk` today. `getAuthTime()` says when that was.
+- `getAuthenticationMethods()` gives the raw values, including any Google adds that `AuthenticationMethodEnum` doesn't
+  have yet.
+
 ## The rest of the ID token
 `getClaims()` gives you every claim in the ID token, keyed by name, including any that have no getter of their own.
 Any claims within claims (JSON objects) are arrays too, so it is plain data all the way down:
@@ -64,10 +101,4 @@ The values are exactly as Google sent them, so check their types before using th
 getter, use the getter instead, as it has been checked (e.g. `getEmailVerified()` is always a `bool`).
 
 Google doesn't currently include any claims beyond those in [the table above](#the-details) for the scopes the
-package asks for. In particular, it doesn't say how the user logged in, e.g. whether they used two-step verification
-(the `amr` and `acr` claims, which some other providers include). If Google starts sending them, they will be in
-`getClaims()`, but until then, don't treat a missing `amr` as meaning anything.
-
-If you need to know that everyone logging in uses two-step verification, the way to do it with Google is to require it
-in your Google Workspace's admin console, and then only let in users from your Workspace (see
-[Security](security.md#two-step-verification)).
+package asks for. If it starts sending more, they will be in `getClaims()`.
