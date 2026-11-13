@@ -79,6 +79,7 @@ domain the user is from. See [Security](security.md).
 - **The login URL** has your client ID, your callback URL, the `state`, the scopes `openid email profile`, and the
   PKCE `code_challenge` (with `code_challenge_method=S256`). It doesn't ask for offline access, so Google doesn't give a
   refresh token, and the consent screen is the smallest it can be.
+  It also has any [login options](login-options.md) you give it (`prompt`, `hd` and `login_hint`).
 - **The token request** is a `POST` to `https://oauth2.googleapis.com/token`, as `application/x-www-form-urlencoded`,
   with the code, your client ID and secret, your callback URL, and the PKCE `code_verifier`.
 - **The certificates request** is a `GET` to `https://www.googleapis.com/oauth2/v3/certs`.

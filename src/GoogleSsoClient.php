@@ -142,13 +142,24 @@ class GoogleSsoClient
      * doesn't suit PSR-7 frameworks (such as Slim), where you should instead redirect to the URL from
      * createGoogleSsoLoginUrl() through your response object.
      *
+     * @param LoginPromptEnum $prompt - what Google should show the user. See createGoogleSsoLoginUrl().
+     *
+     * @param string $hostedDomainHint - a Google Workspace domain to suggest. See createGoogleSsoLoginUrl().
+     *
+     * @param string $loginHint - the account to suggest. See createGoogleSsoLoginUrl().
+     *
      * @return never
      *
+     * @throws \InvalidArgumentException - if $hostedDomainHint isn't a domain, "*" or "".
      * @throws RandomException
      */
-    public function sendUserToGoogleLogin() : never
+    public function sendUserToGoogleLogin(
+        LoginPromptEnum $prompt = LoginPromptEnum::DEFAULT,
+        string $hostedDomainHint = "",
+        string $loginHint = "",
+    ) : never
     {
-        $url = $this->createGoogleSsoLoginUrl();
+        $url = $this->createGoogleSsoLoginUrl($prompt, $hostedDomainHint, $loginHint);
         header("Location: $url");
         die();
     }
@@ -160,12 +171,31 @@ class GoogleSsoClient
      * more than once for the same user (e.g. for several links on a page) reuses the same token, until a callback uses
      * it up. The URL also has a PKCE code challenge, so that only this site can exchange the code Google gives back.
      *
+     * @param LoginPromptEnum $prompt - what Google should show the user, e.g. LoginPromptEnum::SELECT_ACCOUNT to always
+     * ask which Google account to use. Defaults to letting Google decide.
+     *
+     * @param string $hostedDomainHint - a Google Workspace domain (e.g. "example.com") to suggest to the user, so
+     * Google offers that organisation's accounts first, or "*" for any Workspace account. This is only a hint, as the
+     * user can still choose another account, so to only let in your Workspace's users, check getHostedDomain() on the
+     * result of the callback. Defaults to "", for no hint.
+     *
+     * @param string $loginHint - the account to suggest, as an email address or Google ID (the "sub"), e.g. for a user
+     * logging in again. Google fills it in, or picks that account, if it can. Defaults to "", for no hint.
+     *
      * @return string - a Google URL the user needs to go to, in order to login with Google.
      *
+     * @throws \InvalidArgumentException - if $hostedDomainHint isn't a domain, "*" or "".
      * @throws RandomException
      */
-    public function createGoogleSsoLoginUrl() : string
+    public function createGoogleSsoLoginUrl(
+        LoginPromptEnum $prompt = LoginPromptEnum::DEFAULT,
+        string $hostedDomainHint = "",
+        string $loginHint = "",
+    ) : string
     {
+        // check the hint before the CSRF token is created, so a mistake can't leave a token behind
+        $optionalParameters = self::createOptionalLoginParameters($prompt, $hostedDomainHint, $loginHint);
+
         $existingToken = $this->m_csrfTokenStore->getToken();
 
         if ($existingToken !== "")
@@ -178,10 +208,10 @@ class GoogleSsoClient
             $this->m_csrfTokenStore->setToken($stateToken);
         }
 
-        // info about scopes
-        // https://developers.google.com/identity/protocols/oauth2/scopes
         $codeVerifier = $this->createPkceCodeVerifier($stateToken);
 
+        // info about scopes
+        // https://developers.google.com/identity/protocols/oauth2/scopes
         $queryParameters = [
             'scope' => implode(" ", ["email", "openid", "profile"]),
             'response_type' => 'code',
@@ -192,6 +222,7 @@ class GoogleSsoClient
             'code_challenge_method' => 'S256',
         ];
 
+        $queryParameters += $optionalParameters;
         return "https://accounts.google.com/o/oauth2/auth?" . http_build_query($queryParameters);
     }
 
@@ -582,6 +613,53 @@ class GoogleSsoClient
         }
 
         return in_array($keyId, $keyIds, true);
+    }
+
+
+    /**
+     * Create the login URL's optional query parameters, leaving out any that aren't wanted.
+     * @param LoginPromptEnum $prompt - what Google should show the user.
+     * @param string $hostedDomainHint - a Google Workspace domain, "*", or "" for none.
+     * @param string $loginHint - an email address or Google ID, or "" for none.
+     * @return array<string, string>
+     * @throws \InvalidArgumentException - if $hostedDomainHint isn't a domain, "*" or "".
+     */
+    private static function createOptionalLoginParameters(
+        LoginPromptEnum $prompt,
+        string $hostedDomainHint,
+        string $loginHint
+    ) : array
+    {
+        $isDomain = (preg_match('/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i', $hostedDomainHint) === 1);
+
+        if ($hostedDomainHint !== "" && $hostedDomainHint !== "*" && !$isDomain)
+        {
+            $message = (
+                "The hosted domain hint must be a domain such as \"example.com\" (with no \"@\", \"https://\" or path),"
+                . " \"*\" for any Google Workspace account, or \"\" for none, but \"{$hostedDomainHint}\" was given."
+            );
+
+            throw new \InvalidArgumentException($message);
+        }
+
+        $parameters = [];
+
+        if ($prompt !== LoginPromptEnum::DEFAULT)
+        {
+            $parameters['prompt'] = $prompt->value;
+        }
+
+        if ($hostedDomainHint !== "")
+        {
+            $parameters['hd'] = $hostedDomainHint;
+        }
+
+        if ($loginHint !== "")
+        {
+            $parameters['login_hint'] = $loginHint;
+        }
+
+        return $parameters;
     }
 
 

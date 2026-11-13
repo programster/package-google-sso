@@ -1,5 +1,6 @@
 # Upgrading
 
+- [From 0.3.0 to 0.4.0](#from-030-to-040)
 - [From 0.2.0 to 0.3.0](#from-020-to-030)
 - [From 0.1.0 to 0.2.0](#from-010-to-020)
 - [From 0.0.2 to 0.1.0](#from-002-to-010)
@@ -7,7 +8,7 @@
     - [Changes in behaviour](#changes-in-behaviour)
     - [New features](#new-features)
 
-## From 0.2.0 to 0.3.0
+## From 0.3.0 to 0.4.0
 Nothing has been removed or changed in a way that needs your code to change.
 
 - **Logins use PKCE.** The login URL has a code challenge, and the token request sends the matching code verifier, so
@@ -16,6 +17,15 @@ Nothing has been removed or changed in a way that needs your code to change.
   verifier, and only need to log in again.
 - **Token errors include Google's description**, as well as its error code, e.g.
   `(HTTP 400, error: invalid_grant - Bad Request)`.
+
+## From 0.2.0 to 0.3.0
+Nothing has been removed or changed in a way that needs your code to change.
+
+- **The login URL takes three optional settings**: `prompt` (a `LoginPromptEnum`, e.g. `SELECT_ACCOUNT` to always ask
+  which Google account to use), `hostedDomainHint` and `loginHint`. `sendUserToGoogleLogin()` takes them too. See
+  [Login options](login-options.md).
+- **`ExceptionGoogleLoginError::isInteractionRequired()`**, for the errors Google sends back with
+  `LoginPromptEnum::NONE` when the user would have to do something.
 
 ## From 0.1.0 to 0.2.0
 Nothing has been removed or changed in a way that needs your code to change.

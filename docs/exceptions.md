@@ -40,7 +40,7 @@ so catching that one catches them too.
 
 | Exception | Thrown when | Extra methods |
 |---|---|---|
-| `ExceptionGoogleLoginError` | Google sent the user back with an `error` instead of a code, e.g. `access_denied` when they cancel. | `getError()`, `isAccessDenied()` |
+| `ExceptionGoogleLoginError` | Google sent the user back with an `error` instead of a code, e.g. `access_denied` when they cancel. | `getError()`, `isAccessDenied()`, `isInteractionRequired()` |
 | `ExceptionMissingCallbackParameter` | The callback has no `code` or `state` (or it isn't a string), e.g. someone went to the callback URL directly. | `getParameterName()` |
 | `ExceptionCsrfTokenMismatch` | The `state` doesn't match the CSRF token in the session. | `getGoogleResponseToken()`, `getCachedStateToken()` |
 | &nbsp;&nbsp;&nbsp;&nbsp;`ExceptionMissingCsrfToken` | There's no CSRF token in the session: it wasn't started, has expired, the callback was already handled (e.g. the page was refreshed), or the cookie wasn't sent. | |
