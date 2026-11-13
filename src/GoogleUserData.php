@@ -114,6 +114,11 @@ class GoogleUserData
      * Find out if the user signed in to Google with the given method, according to the "amr" claim. It describes their
      * last sign-in to their Google account (see getAuthTime()), which may be long before this login to your site.
      *
+     * Google only sends the amr claim when the client's mfaPolicy is MfaPolicyEnum::REPORT or REQUIRE, and only to
+     * apps that are published ("In production"), verified, and have both "Authentication strength claims" and
+     * "Session age claims" turned on (https://developers.google.com/identity/siwg/security-bundle). Until then, this
+     * is always false, even for users who have two-step verification turned on for their Google account.
+     *
      * @param AuthenticationMethodEnum $method - the method to look for.
      *
      * @return bool - true if Google says it was used, or false if not, or if Google didn't send the amr claim.
@@ -127,6 +132,11 @@ class GoogleUserData
     /**
      * Find out if the user signed in to Google with more than a password: a completed multi-factor challenge, or a
      * hardware or software key, such as a passkey. See AuthenticationMethodEnum::isMultiFactor().
+     *
+     * Google only sends the amr claim when the client's mfaPolicy is MfaPolicyEnum::REPORT or REQUIRE, and only to
+     * apps that are published ("In production"), verified, and have both "Authentication strength claims" and
+     * "Session age claims" turned on (https://developers.google.com/identity/siwg/security-bundle). Until then, this
+     * is always false, even for users who have two-step verification turned on for their Google account.
      *
      * @return bool - true if so, or false if not, or if Google didn't send the amr claim, so a missing claim is never
      * mistaken for multi-factor authentication.
@@ -219,6 +229,8 @@ class GoogleUserData
     public function getPictureUrl() : string { return $this->m_pictureUrl; }
     public function getExpiry() : int { return $this->m_expiry; }
     public function getIssuedAt() : int { return $this->m_issuedAt; }
+    # Empty ([] and 0) unless Google sent the amr and auth_time claims, which needs the client's mfaPolicy to be REPORT
+    # or REQUIRE, and the app to meet Google's requirements. See hasMultiFactorAuthentication().
     public function getAuthenticationMethods() : array { return $this->m_authenticationMethods; }
     public function getAuthTime() : int { return $this->m_authTime; }
     public function getClaims() : array { return $this->m_claims; }

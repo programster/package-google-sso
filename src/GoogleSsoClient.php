@@ -79,8 +79,11 @@ class GoogleSsoClient
      * e.g. Laravel's, which doesn't use $_SESSION.
      *
      * @param MfaPolicyEnum $mfaPolicy - whether to ask Google how the user signed in to their Google account (REPORT),
-     * and refuse users who didn't use multi-factor authentication (REQUIRE). Google only says for apps it has
-     * verified, with "Authentication strength claims" turned on. Defaults to IGNORE, which doesn't ask.
+     * and refuse users who didn't use multi-factor authentication (REQUIRE). Google only sends the amr and auth_time
+     * claims to apps that are published ("In production"), verified, and have both "Authentication strength claims"
+     * and "Session age claims" turned on (https://developers.google.com/identity/siwg/security-bundle). Until then,
+     * Google sends nothing, so REPORT never reports MFA, and REQUIRE refuses everyone. Defaults to IGNORE, which
+     * doesn't ask.
      *
      * @throws \InvalidArgumentException - if $jwtLeewaySeconds is negative, or $sessionCsrfTokenKey is given along
      * with a $csrfTokenStore that it can't apply to.
