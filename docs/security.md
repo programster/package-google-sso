@@ -26,21 +26,29 @@ logs in with Google, store their `sub` against their account, and look them up b
 $user = $users->findByGoogleId($googleUser->getSub());
 ```
 
-**Only match by email address if Google has verified it.** If you also find accounts by email address (e.g. so that
-someone who signed up with a password can start logging in with Google), check `getEmailVerified()` first. A Google
-account can have an email address that its owner hasn't proved they own, and without the check, anyone could make a
-Google account with your user's address, and log in as them:
+**Only match by email address if Google has verified it.** A Google account can have an email address that its owner
+hasn't proved they own, and if you find accounts by email address (e.g. so that someone who signed up with a password
+can start logging in with Google), anyone could make a Google account with your user's address, and log in as them.
+So by default, `handleGoogleSsoCallback()` refuses users whose address Google hasn't verified, by throwing an
+`ExceptionUnverifiedEmail`, and every user it returns has an address you can match on:
 
 ```php
-if (!$googleUser->getEmailVerified())
-{
-    throw new Exception("Please verify your email address with Google, and then try again.");
-}
-
 $user = $users->findByEmail($googleUser->getEmail());
 
 // Store their Google ID, so that from now on they are found by it.
 $users->linkGoogleId($user, $googleUser->getSub());
+```
+
+**Only let unverified addresses in if you never use them.** If your site only ever finds users by `getSub()`, and the
+email address is only for showing or contacting them, refusing these users locks them out for nothing. Pass
+`UnverifiedEmailPolicyEnum::ALLOW` to let them in, and never find a user by `getEmail()` unless `getEmailVerified()`
+is true:
+
+```php
+use Programster\GoogleSso\UnverifiedEmailPolicyEnum;
+
+$googleUser = $googleSso->handleGoogleSsoCallback($_GET, UnverifiedEmailPolicyEnum::ALLOW);
+$user = $users->findByGoogleId($googleUser->getSub());
 ```
 
 **Don't rely on the email address staying the same.** People change their address, and an address can be given to
@@ -100,7 +108,8 @@ The package checks the login, but logging the user in to your site is up to you:
 
 ## Checklist
 - [ ] Users are found by `getSub()`, which is stored as a string, with a unique index.
-- [ ] If users are ever found by email address, `getEmailVerified()` is checked first.
+- [ ] If `UnverifiedEmailPolicyEnum::ALLOW` is used, users are never found by email address without checking
+  `getEmailVerified()` first.
 - [ ] If only your organisation should get in, `getHostedDomain()` is checked.
 - [ ] The session ID is regenerated after logging in.
 - [ ] The session cookie is `Secure`, `HttpOnly` and `SameSite=Lax`.

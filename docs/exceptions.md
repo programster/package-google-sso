@@ -46,6 +46,7 @@ so catching that one catches them too.
 | &nbsp;&nbsp;&nbsp;&nbsp;`ExceptionMissingCsrfToken` | There's no CSRF token in the session: it wasn't started, has expired, the callback was already handled (e.g. the page was refreshed), or the cookie wasn't sent. | |
 | `ExceptionUnexpectedResponse` | Google's token or certificates endpoint returned an error, or something that isn't the JSON expected. The message includes the HTTP status and Google's error, e.g. `invalid_grant`. | `getResponse()` |
 | `ExceptionInvalidIdToken` | The ID token wasn't issued by Google, was issued to a different client, or is missing a claim Google always includes. | |
+| `ExceptionUnverifiedEmail` | Google hasn't verified that the user owns their email address. Not thrown if you pass `UnverifiedEmailPolicyEnum::ALLOW` to the callback. | `getEmail()` |
 
 The constructor also throws `\InvalidArgumentException` if `jwtLeewaySeconds` is negative.
 
@@ -70,6 +71,7 @@ Some exceptions come from the libraries the package uses, and are passed on as t
 | They cancelled | `ExceptionGoogleLoginError` with `isAccessDenied()` | "You cancelled the login." Show the login page again. |
 | They refreshed the callback page, or came back to it | `ExceptionMissingCsrfToken`, `ExceptionUnexpectedResponse` (`invalid_grant`) | "Your login has expired. Please try again." If they're already logged in, just send them on. |
 | Their session expired while they were at Google | `ExceptionMissingCsrfToken` | "Your login has expired. Please try again." |
+| Google hasn't verified their email address | `ExceptionUnverifiedEmail` | "Please verify your email address with Google, and then try again." |
 | Google is unreachable or returned an error | `ClientExceptionInterface`, `ExceptionUnexpectedResponse` | "We couldn't reach Google. Please try again in a few minutes." |
 | Anything else | The rest | "Sorry, we couldn't log you in with Google." Log it, as it may be a misconfiguration or someone tampering. |
 

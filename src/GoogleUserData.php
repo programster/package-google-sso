@@ -7,24 +7,24 @@ namespace Programster\GoogleSso;
 use Programster\GoogleSso\Exceptions\ExceptionInvalidIdToken;
 
 
-class GoogleUserData
+final readonly class GoogleUserData
 {
-    private readonly string $m_iss;
-    private readonly string $m_azp;
-    private readonly string $m_aud;
-    private readonly string $m_sub;
-    private readonly string $m_email;
-    private readonly bool $m_emailVerified;
-    private readonly string $m_hostedDomain;
-    private readonly string $m_atHash;
-    private readonly string $m_firstName;
-    private readonly string $m_lastName;
-    private readonly string $m_fullName;
-    private readonly string $m_pictureUrl;
-    private readonly int $m_expiry;
-    private readonly int $m_issuedAt;
+    private string $m_iss;
+    private string $m_azp;
+    private string $m_aud;
+    private string $m_sub;
+    private string $m_email;
+    private bool $m_emailVerified;
+    private string $m_hostedDomain;
+    private string $m_atHash;
+    private string $m_firstName;
+    private string $m_lastName;
+    private string $m_fullName;
+    private string $m_pictureUrl;
+    private int $m_expiry;
+    private int $m_issuedAt;
     # Every claim in the ID token, as Google sent them (so unchecked), keyed by name. See getClaims().
-    private readonly array $m_claims;
+    private array $m_claims;
 
 
     private function __construct(

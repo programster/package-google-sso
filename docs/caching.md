@@ -27,6 +27,7 @@ $googleSso = new GoogleSsoClient(
     clientSecret: getenv("GOOGLE_CLIENT_SECRET"),
     googleCallbackUrl: "https://example.com/login/callback",
     requestFactory: new \GuzzleHttp\Psr7\HttpFactory(),
+    responseFactory: new \GuzzleHttp\Psr7\HttpFactory(),
     httpClient: new \GuzzleHttp\Client(['timeout' => 10]),
     cacheConfig: new CacheConfig($cachePool),
 );

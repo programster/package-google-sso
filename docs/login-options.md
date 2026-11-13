@@ -5,9 +5,9 @@
 - [Suggesting an account (login_hint)](#suggesting-an-account-login_hint)
 - [Logging in without the user noticing](#logging-in-without-the-user-noticing)
 
-`createGoogleSsoLoginUrl()` and `sendUserToGoogleLogin()` take three optional settings, which change what Google shows
-the user. Each is for that one login URL, so different links (or users) can use different settings. Named arguments
-make it clear which is which:
+`createGoogleSsoLoginUrl()` and `createGoogleSsoLoginResponse()` take three optional settings, which change what
+Google shows the user. Each is for that one login URL, so different links (or users) can use different settings.
+Named arguments make it clear which is which:
 
 ```php
 use Programster\GoogleSso\LoginPromptEnum;
@@ -88,7 +88,8 @@ catch (ExceptionGoogleLoginError $e)
     if ($e->isInteractionRequired())
     {
         // They couldn't be logged in without seeing anything, so send them to log in normally.
-        $googleSso->sendUserToGoogleLogin();
+        header("Location: " . $googleSso->createGoogleSsoLoginUrl());
+        exit;
     }
 
     throw $e;

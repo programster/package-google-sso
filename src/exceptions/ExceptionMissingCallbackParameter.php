@@ -8,7 +8,7 @@ namespace Programster\GoogleSso\Exceptions;
  * Thrown when the callback request is missing a query parameter that Google always sends (code or state), or it isn't
  * a string. This usually means someone went to the callback URL directly, rather than being sent there by Google.
  */
-class ExceptionMissingCallbackParameter extends ExceptionGoogleSso
+final class ExceptionMissingCallbackParameter extends ExceptionGoogleSso
 {
     private readonly string $m_parameterName;
 

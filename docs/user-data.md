@@ -31,8 +31,9 @@ changed once created.
   Store it in your users table, with a unique index. Store it as a string, not a number: it is up to 255 characters,
   and too big for a 64-bit integer.
 - **Don't identify the user by email address alone.** People change their address, and an address can end up with
-  someone else, e.g. when a company domain changes hands. If you do match by email (e.g. to link Google to an account
-  someone made with a password), check `getEmailVerified()` first. See
+  someone else, e.g. when a company domain changes hands. Matching by email (e.g. to link Google to an account
+  someone made with a password) is safe by default, as users whose address Google hasn't verified are refused. If you
+  pass `UnverifiedEmailPolicyEnum::ALLOW`, check `getEmailVerified()` first. See
   [Security](security.md#matching-users-to-accounts).
 - **To only let in your organisation, use `getHostedDomain()`**, not the end of the email address. See
   [Security](security.md#only-letting-in-your-workspace).

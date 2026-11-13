@@ -103,6 +103,7 @@ $googleSso = new GoogleSsoClient(
     clientSecret: getenv("GOOGLE_CLIENT_SECRET"),
     googleCallbackUrl: "https://example.com/callback.php",
     requestFactory: new \GuzzleHttp\Psr7\HttpFactory(),
+    responseFactory: new \GuzzleHttp\Psr7\HttpFactory(),
     httpClient: new \GuzzleHttp\Client(['timeout' => 10]),
 );
 ```
@@ -114,7 +115,7 @@ $googleSso = new GoogleSsoClient(
 
 require_once(__DIR__ . "/google-sso.php");
 
-$googleSso->sendUserToGoogleLogin();
+header("Location: " . $googleSso->createGoogleSsoLoginUrl());
 ```
 
 `callback.php` is where Google sends them back:
@@ -123,6 +124,7 @@ $googleSso->sendUserToGoogleLogin();
 <?php
 
 use Programster\GoogleSso\Exceptions\ExceptionGoogleLoginError;
+use Programster\GoogleSso\Exceptions\ExceptionUnverifiedEmail;
 
 require_once(__DIR__ . "/google-sso.php");
 
@@ -134,6 +136,12 @@ catch (ExceptionGoogleLoginError $e)
 {
     // The user cancelled at Google, or Google refused to log them in.
     header("Location: /?login=cancelled");
+    exit;
+}
+catch (ExceptionUnverifiedEmail $e)
+{
+    // Google hasn't verified that they own their email address, so it can't be trusted.
+    header("Location: /?login=unverified-email");
     exit;
 }
 
@@ -175,20 +183,21 @@ Google leaves out the name and picture for some accounts, in which case they are
 [The user's details](docs/user-data.md) for everything that's there.
 
 ### Match users to accounts safely
-Link accounts by `getSub()`, Google's permanent ID for the user. If you also find accounts by email address (e.g. to
-link Google to an account someone already has), check that Google has verified the address first. Otherwise, someone
-could log in to another person's account with a Google account using an address they don't own:
+Link accounts by `getSub()`, Google's permanent ID for the user. You can also find accounts by email address (e.g. to
+link Google to an account someone already has), as `handleGoogleSsoCallback()` refuses users whose address Google
+hasn't verified, by throwing an `ExceptionUnverifiedEmail`. Otherwise, someone could log in to another person's account
+with a Google account using an address they don't own.
+
+If your site only ever finds users by `getSub()`, and doesn't trust the email address for anything, you can let those
+users in too:
 
 ```php
-if (!$googleUser->getEmailVerified())
-{
-    throw new Exception("Please verify your email address with Google, and then try again.");
-}
+use Programster\GoogleSso\UnverifiedEmailPolicyEnum;
 
-$user = $users->findByEmail($googleUser->getEmail());
+$googleUser = $googleSso->handleGoogleSsoCallback($_GET, UnverifiedEmailPolicyEnum::ALLOW);
 ```
 
-See [Security](docs/security.md) for more.
+See [Security](docs/security.md#matching-users-to-accounts) for more.
 
 ### Only allow your Google Workspace domain
 Check the hosted domain, rather than the end of the email address, as only the hosted domain shows that the account is
@@ -232,15 +241,15 @@ use Programster\GoogleSso\LoginPromptEnum;
 $loginUrl = $googleSso->createGoogleSsoLoginUrl(prompt: LoginPromptEnum::SELECT_ACCOUNT);
 ```
 
-`sendUserToGoogleLogin()` takes the same options. See [Login options](docs/login-options.md) for the others.
+`createGoogleSsoLoginResponse()` takes the same options. See [Login options](docs/login-options.md) for the others.
 
 ### Use it with Slim or another PSR-7 framework
-`sendUserToGoogleLogin()` sends a header and exits, so in a framework where you return a response, redirect to
-`createGoogleSsoLoginUrl()` yourself, and pass the request's query parameters to `handleGoogleSsoCallback()`:
+In a framework where routes return a PSR-7 response, return `createGoogleSsoLoginResponse()`, which redirects to
+Google, and pass the request's query parameters to `handleGoogleSsoCallback()`:
 
 ```php
 $sendToGoogle = function (ServerRequestInterface $request, ResponseInterface $response) use ($googleSso) {
-    return $response->withHeader('Location', $googleSso->createGoogleSsoLoginUrl())->withStatus(302);
+    return $googleSso->createGoogleSsoLoginResponse();
 };
 
 $handleGoogleCallback = function (ServerRequestInterface $request, ResponseInterface $response) use ($googleSso) {
@@ -265,6 +274,7 @@ $googleSso = new GoogleSsoClient(
     clientSecret: getenv("GOOGLE_CLIENT_SECRET"),
     googleCallbackUrl: "https://example.com/callback.php",
     requestFactory: new \GuzzleHttp\Psr7\HttpFactory(),
+    responseFactory: new \GuzzleHttp\Psr7\HttpFactory(),
     httpClient: new \GuzzleHttp\Client(['timeout' => 10]),
     cacheConfig: new \Programster\GoogleSso\CacheConfig($cachePool),
 );

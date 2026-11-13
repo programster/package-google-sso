@@ -6,11 +6,11 @@ namespace Programster\GoogleSso;
 
 use Psr\Cache\CacheItemPoolInterface;
 
-class CacheConfig
+final readonly class CacheConfig
 {
-    private readonly CacheItemPoolInterface $m_cacheItemPool;
-    private readonly int $m_jwtCachePeriod;
-    private readonly string $m_cacheKey;
+    private CacheItemPoolInterface $m_cacheItemPool;
+    private int $m_jwtCachePeriod;
+    private string $m_cacheKey;
 
 
     /**

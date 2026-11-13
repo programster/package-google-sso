@@ -6,7 +6,7 @@
 - [Creating it once](#creating-it-once)
 
 ## Creating the client
-Everything is set when the `GoogleSsoClient` is created. Only the first five options are needed, and the rest have
+Everything is set when the `GoogleSsoClient` is created. Only the first six options are needed, and the rest have
 defaults that suit nearly everyone. Named arguments make it clear which is which:
 
 ```php
@@ -18,6 +18,7 @@ $googleSso = new GoogleSsoClient(
     clientSecret: getenv("GOOGLE_CLIENT_SECRET"),
     googleCallbackUrl: "https://example.com/login/callback",
     requestFactory: new \GuzzleHttp\Psr7\HttpFactory(),
+    responseFactory: new \GuzzleHttp\Psr7\HttpFactory(),
     httpClient: new \GuzzleHttp\Client(['timeout' => 10]),
     cacheConfig: new CacheConfig($cachePool),
     jwtLeewaySeconds: 60,
@@ -32,13 +33,13 @@ $googleSso = new GoogleSsoClient(
 | `clientSecret` | (required) | The client secret that goes with it. Load it from the environment, rather than putting it in your code. |
 | `googleCallbackUrl` | (required) | The URL that Google sends users back to, where you call `handleGoogleSsoCallback()`. It must match one of the client's authorised redirect URIs exactly. |
 | `requestFactory` | (required) | A PSR-17 `RequestFactoryInterface`, for creating the requests to Google, e.g. `new \GuzzleHttp\Psr7\HttpFactory()`. |
+| `responseFactory` | (required) | A PSR-17 `ResponseFactoryInterface`, for creating the redirect that `createGoogleSsoLoginResponse()` returns. Guzzle's `HttpFactory` is both factories, so pass one for each. |
 | `httpClient` | (required) | A PSR-18 `ClientInterface`, for sending them, e.g. `new \GuzzleHttp\Client()`. |
 | `cacheConfig` | `null` | A `CacheConfig`, to cache Google's certificates rather than fetching them on every login. See [Caching](caching.md). |
-| `sessionCsrfTokenKey` | `"googleSsoCsrfToken"` | Deprecated: pass `new NativeSessionCsrfTokenStore("yourKey")` as the `csrfTokenStore` instead. The `$_SESSION` key the CSRF token is kept under. It can't be combined with a store of your own, which decides for itself where the token is kept, so the constructor throws if you try. |
+| `csrfTokenStore` | `new NativeSessionCsrfTokenStore()` | Where the CSRF token is kept for the user, between them leaving for Google and coming back. The default keeps it in `$_SESSION`. See [Frameworks and sessions](frameworks.md) for using your framework's session instead. |
+| `jwtLeewaySeconds` | `60` | How many seconds your server's clock may be out from Google's when checking the ID token's times. Can't be negative. |
 | `googleJwtCertsUrl` | `"https://www.googleapis.com/oauth2/v3/certs"` | Where Google's certificates are fetched from. You shouldn't need to change it. |
 | `googleOauthUrl` | `"https://oauth2.googleapis.com"` | The base of Google's OAuth endpoints, which `/token` is added to. You shouldn't need to change it. A trailing slash is removed. |
-| `jwtLeewaySeconds` | `60` | How many seconds your server's clock may be out from Google's when checking the ID token's times. Can't be negative. |
-| `csrfTokenStore` | `new NativeSessionCsrfTokenStore()` | Where the CSRF token is kept for the user, between them leaving for Google and coming back. The default keeps it in `$_SESSION`. See [Frameworks and sessions](frameworks.md) for using your framework's session instead. |
 
 ### jwtLeewaySeconds
 An ID token says when it was issued (`iat`) and when it expires (`exp`), an hour later. If your server's clock is
@@ -53,7 +54,7 @@ anything else that uses `firebase/php-jwt`.
 ## Choosing an HTTP client
 Any PSR-18 client and PSR-17 factory will do. Some common choices:
 
-| Package | `requestFactory` | `httpClient` |
+| Package | `requestFactory` and `responseFactory` | `httpClient` |
 |---|---|---|
 | `guzzlehttp/guzzle` | `new \GuzzleHttp\Psr7\HttpFactory()` | `new \GuzzleHttp\Client(['timeout' => 10])` |
 | `symfony/http-client` and `nyholm/psr7` | `new \Nyholm\Psr7\Factory\Psr17Factory()` | `new \Symfony\Component\HttpClient\Psr18Client()` |

@@ -12,12 +12,14 @@ use Programster\GoogleSso\Exceptions\ExceptionInvalidIdToken;
 use Programster\GoogleSso\Exceptions\ExceptionMissingCallbackParameter;
 use Programster\GoogleSso\Exceptions\ExceptionMissingCsrfToken;
 use Programster\GoogleSso\Exceptions\ExceptionUnexpectedResponse;
+use Programster\GoogleSso\Exceptions\ExceptionUnverifiedEmail;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Random\RandomException;
 
-class GoogleSsoClient
+final readonly class GoogleSsoClient
 {
     /**
      * The values Google may put in an ID token's "iss" claim.
@@ -25,16 +27,17 @@ class GoogleSsoClient
      */
     private const VALID_ISSUERS = ["accounts.google.com", "https://accounts.google.com"];
 
-    private readonly string $m_clientId;
-    private readonly string $m_clientSecret;
-    private readonly string $m_googleCallbackUrl;
-    private readonly RequestFactoryInterface $m_requestFactory;
-    private readonly ClientInterface $m_httpClient;
-    private readonly ?CacheConfig $m_cacheConfig;
-    private readonly CsrfTokenStoreInterface $m_csrfTokenStore;
-    private readonly string $m_googleJwtCertsUrl;
-    private readonly string $m_googleOauthUrl;
-    private readonly int $m_jwtLeewaySeconds;
+    private string $m_clientId;
+    private string $m_clientSecret;
+    private string $m_googleCallbackUrl;
+    private RequestFactoryInterface $m_requestFactory;
+    private ResponseFactoryInterface $m_responseFactory;
+    private ClientInterface $m_httpClient;
+    private ?CacheConfig $m_cacheConfig;
+    private CsrfTokenStoreInterface $m_csrfTokenStore;
+    private int $m_jwtLeewaySeconds;
+    private string $m_googleJwtCertsUrl;
+    private string $m_googleOauthUrl;
 
 
     /**
@@ -51,6 +54,9 @@ class GoogleSsoClient
      * @param RequestFactoryInterface $requestFactory - the factory you wish to use for creating HTTP requests, which
      * we will use for sending requests to Google. We recommend \GuzzleHttp\Psr7\HttpFactory().
      *
+     * @param ResponseFactoryInterface $responseFactory - the factory for creating the redirect response that
+     * createGoogleSsoLoginResponse() returns. \GuzzleHttp\Psr7\HttpFactory() is both, so the same one can be passed.
+     *
      * @param ClientInterface $httpClient - the HTTP client you wish to use for sending/receiving messages
      * to Google, including fetching Google's certificates. We recommend \GuzzleHttp\Client().
      *
@@ -58,9 +64,12 @@ class GoogleSsoClient
      * of fetching the Google SSO certificate information, so that the server does not have to look this up every time
      * a user logs in. This improves performance at the cost of extra setup/configuration.
      *
-     * @param string $sessionCsrfTokenKey - deprecated: pass new NativeSessionCsrfTokenStore($key) as $csrfTokenStore
-     * instead. The $_SESSION key the CSRF token is kept under, which defaults to googleSsoCsrfToken. It can't be used
-     * with a $csrfTokenStore of your own, which decides for itself where the token is kept.
+     * @param CsrfTokenStoreInterface $csrfTokenStore - where to keep the CSRF token for the current user, between them
+     * leaving for Google and coming back. Defaults to $_SESSION. Pass your own to use your framework's session instead,
+     * e.g. Laravel's, which doesn't use $_SESSION.
+     *
+     * @param int $jwtLeewaySeconds - how many seconds this server's clock may be out from Google's, when checking the
+     * ID token's issued-at and expiry times. Defaults to 60.
      *
      * @param string $googleJwtCertsUrl - where google's JWT public key data is held, which we will use to verify that
      * the JWT we received on our handler is actually from Google, and someone isn't trying to hack their way in with
@@ -69,28 +78,20 @@ class GoogleSsoClient
      * @param string $googleOauthUrl - the base of all of the Oauth2 endpoints for Google. You shouldn't need to
      * override this, but this is here just in case it changes and I fail to update this package in time.
      *
-     * @param int $jwtLeewaySeconds - how many seconds this server's clock may be out from Google's, when checking the
-     * ID token's issued-at and expiry times. Defaults to 60.
-     *
-     * @param CsrfTokenStoreInterface $csrfTokenStore - where to keep the CSRF token for the current user, between them
-     * leaving for Google and coming back. Defaults to $_SESSION. Pass your own to use your framework's session instead,
-     * e.g. Laravel's, which doesn't use $_SESSION.
-     *
-     * @throws \InvalidArgumentException - if $jwtLeewaySeconds is negative, or $sessionCsrfTokenKey is given along
-     * with a $csrfTokenStore that it can't apply to.
+     * @throws \InvalidArgumentException - if $jwtLeewaySeconds is negative.
      */
     public function __construct(
         string $clientId,
         string $clientSecret,
         string $googleCallbackUrl,
         RequestFactoryInterface $requestFactory,
+        ResponseFactoryInterface $responseFactory,
         ClientInterface $httpClient,
         ?CacheConfig $cacheConfig = null,
-        string $sessionCsrfTokenKey = NativeSessionCsrfTokenStore::DEFAULT_KEY,
+        CsrfTokenStoreInterface $csrfTokenStore = new NativeSessionCsrfTokenStore(),
+        int $jwtLeewaySeconds = 60,
         string $googleJwtCertsUrl = "https://www.googleapis.com/oauth2/v3/certs",
         string $googleOauthUrl = "https://oauth2.googleapis.com",
-        int $jwtLeewaySeconds = 60,
-        CsrfTokenStoreInterface $csrfTokenStore = new NativeSessionCsrfTokenStore(),
     )
     {
         if ($jwtLeewaySeconds < 0)
@@ -98,70 +99,17 @@ class GoogleSsoClient
             throw new \InvalidArgumentException("The JWT leeway can't be negative, but {$jwtLeewaySeconds} was given.");
         }
 
-        // The deprecated $sessionCsrfTokenKey only means anything to a native session store, so it must not be ignored.
-        $isNativeStore = ($csrfTokenStore instanceof NativeSessionCsrfTokenStore);
-        $nativeStoreKey = $isNativeStore ? $csrfTokenStore->getKey() : "";
-
-        if (
-               $sessionCsrfTokenKey === NativeSessionCsrfTokenStore::DEFAULT_KEY
-            || $nativeStoreKey === $sessionCsrfTokenKey
-        )
-        {
-            $this->m_csrfTokenStore = $csrfTokenStore;
-        }
-        elseif ($nativeStoreKey === NativeSessionCsrfTokenStore::DEFAULT_KEY)
-        {
-            $this->m_csrfTokenStore = new NativeSessionCsrfTokenStore($sessionCsrfTokenKey);
-        }
-        else
-        {
-            $message = (
-                "sessionCsrfTokenKey can't be used with a csrfTokenStore of your own, which decides where the token is"
-                . " kept. To keep it in \$_SESSION under that key, pass"
-                . " new NativeSessionCsrfTokenStore(\"{$sessionCsrfTokenKey}\") as the csrfTokenStore instead."
-            );
-
-            throw new \InvalidArgumentException($message);
-        }
-
         $this->m_clientId = $clientId;
         $this->m_clientSecret = $clientSecret;
         $this->m_googleCallbackUrl = $googleCallbackUrl;
         $this->m_requestFactory = $requestFactory;
+        $this->m_responseFactory = $responseFactory;
         $this->m_httpClient = $httpClient;
         $this->m_cacheConfig = $cacheConfig;
+        $this->m_csrfTokenStore = $csrfTokenStore;
+        $this->m_jwtLeewaySeconds = $jwtLeewaySeconds;
         $this->m_googleJwtCertsUrl = $googleJwtCertsUrl;
         $this->m_googleOauthUrl = rtrim($googleOauthUrl, "/");
-        $this->m_jwtLeewaySeconds = $jwtLeewaySeconds;
-    }
-
-
-    /**
-     * Send the user's browser to the Google SSO login page, where the user logs in, or if already logged in
-     * just confirms they wish to allow our application to know about them. This sends a header and exits, so it
-     * doesn't suit PSR-7 frameworks (such as Slim), where you should instead redirect to the URL from
-     * createGoogleSsoLoginUrl() through your response object.
-     *
-     * @param LoginPromptEnum $prompt - what Google should show the user. See createGoogleSsoLoginUrl().
-     *
-     * @param string $hostedDomainHint - a Google Workspace domain to suggest. See createGoogleSsoLoginUrl().
-     *
-     * @param string $loginHint - the account to suggest. See createGoogleSsoLoginUrl().
-     *
-     * @return never
-     *
-     * @throws \InvalidArgumentException - if $hostedDomainHint isn't a domain, "*" or "".
-     * @throws RandomException
-     */
-    public function sendUserToGoogleLogin(
-        LoginPromptEnum $prompt = LoginPromptEnum::DEFAULT,
-        string $hostedDomainHint = "",
-        string $loginHint = "",
-    ) : never
-    {
-        $url = $this->createGoogleSsoLoginUrl($prompt, $hostedDomainHint, $loginHint);
-        header("Location: $url");
-        die();
     }
 
 
@@ -224,17 +172,48 @@ class GoogleSsoClient
 
 
     /**
+     * Create the response that sends the user's browser to Google to log in: a redirect to createGoogleSsoLoginUrl(),
+     * for a framework's route to return, e.g. in Slim. It isn't to be cached, as it carries this user's CSRF token.
+     *
+     * @param LoginPromptEnum $prompt - what Google should show the user. See createGoogleSsoLoginUrl().
+     *
+     * @param string $hostedDomainHint - a Google Workspace domain to suggest. See createGoogleSsoLoginUrl().
+     *
+     * @param string $loginHint - the account to suggest. See createGoogleSsoLoginUrl().
+     *
+     * @return ResponseInterface - a 302 redirect to Google.
+     *
+     * @throws \InvalidArgumentException - if $hostedDomainHint isn't a domain, "*" or "".
+     * @throws RandomException
+     */
+    public function createGoogleSsoLoginResponse(
+        LoginPromptEnum $prompt = LoginPromptEnum::DEFAULT,
+        string $hostedDomainHint = "",
+        string $loginHint = "",
+    ) : ResponseInterface
+    {
+        $url = $this->createGoogleSsoLoginUrl($prompt, $hostedDomainHint, $loginHint);
+
+        return $this->m_responseFactory->createResponse(302)
+            ->withHeader("Location", $url)
+            ->withHeader("Cache-Control", "no-store");
+    }
+
+
+    /**
      * Handle Google redirecting the user back to your site after they have logged in (or cancelled). Call this on the
      * endpoint you gave as $googleCallbackUrl, passing it the request's query parameters, e.g. $_GET, or
      * $request->getQueryParams() in a PSR-7 framework.
      *
      * This checks the state against the stored CSRF token (which is then used up, whether it matched or not),
-     * trades the code for an ID token, and checks the ID token's signature, expiry, issuer and audience.
-     *
-     * This does NOT check that the user's email address has been verified. If you match users to accounts by email,
-     * check getEmailVerified() on the result first.
+     * trades the code for an ID token, checks the ID token's signature, expiry, issuer and audience, and by default,
+     * refuses a user whose email address Google hasn't verified.
      *
      * @param array<string, mixed> $queryParameters - the callback request's query parameters.
+     *
+     * @param UnverifiedEmailPolicyEnum $unverifiedEmailPolicy - what to do with a user whose email address Google
+     * hasn't verified. Defaults to REFUSE, which throws an ExceptionUnverifiedEmail, so the email address of every user
+     * returned can be trusted. Only pass ALLOW if you never find users by their email address, only by getSub().
      *
      * @return GoogleUserData
      *
@@ -244,11 +223,15 @@ class GoogleSsoClient
      * @throws ExceptionCsrfTokenMismatch - if the state doesn't match the stored CSRF token.
      * @throws ExceptionUnexpectedResponse - if Google's token or certificate endpoints responded with an error.
      * @throws ExceptionInvalidIdToken - if the ID token wasn't issued by Google, or to this client.
+     * @throws ExceptionUnverifiedEmail - if Google hasn't verified the user's email address, and that is refused.
      * @throws \UnexpectedValueException - if php-jwt rejects the ID token, e.g. a bad signature, or it has expired.
      * @throws \Psr\Cache\InvalidArgumentException
      * @throws \Psr\Http\Client\ClientExceptionInterface
      */
-    public function handleGoogleSsoCallback(array $queryParameters) : GoogleUserData
+    public function handleGoogleSsoCallback(
+        array $queryParameters,
+        UnverifiedEmailPolicyEnum $unverifiedEmailPolicy = UnverifiedEmailPolicyEnum::REFUSE,
+    ) : GoogleUserData
     {
         // use up the stored token straight away, so it can't be used by another callback, whatever happens next
         $sessionToken = $this->m_csrfTokenStore->getToken();
@@ -274,50 +257,14 @@ class GoogleSsoClient
 
         $code = self::getRequiredQueryParameter($queryParameters, "code");
         $idToken = $this->exchangeCodeForIdToken($code);
-        return $this->decodeIdToken($idToken);
-    }
+        $googleUser = $this->decodeIdToken($idToken);
 
-
-    /**
-     * Handle Google redirecting the user back to your site after the user has logged in, reading the query parameters
-     * from $_GET.
-     *
-     * @deprecated - use handleGoogleSsoCallback() instead, passing it $_GET or your framework's query parameters.
-     *
-     * @param string|null $code - optionally provide the code that Google provided in the URL, instead of it being
-     * read from $_GET.
-     *
-     * @param string|null $state - optionally provide the "state" that Google provided in the URL, instead of it being
-     * read from $_GET.
-     *
-     * @return GoogleUserData
-     *
-     * @throws ExceptionGoogleLoginError
-     * @throws ExceptionMissingCallbackParameter
-     * @throws ExceptionCsrfTokenMismatch
-     * @throws ExceptionUnexpectedResponse
-     * @throws ExceptionInvalidIdToken
-     * @throws \Psr\Cache\InvalidArgumentException
-     * @throws \Psr\Http\Client\ClientExceptionInterface
-     */
-    public function handleGoogleSsoLogin(
-        ?string $code = null,
-        ?string $state = null,
-    ) : GoogleUserData
-    {
-        $queryParameters = $_GET;
-
-        if ($code !== null)
+        if ($unverifiedEmailPolicy === UnverifiedEmailPolicyEnum::REFUSE && !$googleUser->getEmailVerified())
         {
-            $queryParameters['code'] = $code;
+            throw new ExceptionUnverifiedEmail($googleUser->getEmail());
         }
 
-        if ($state !== null)
-        {
-            $queryParameters['state'] = $state;
-        }
-
-        return $this->handleGoogleSsoCallback($queryParameters);
+        return $googleUser;
     }
 
 
