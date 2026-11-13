@@ -5,6 +5,9 @@
 - [Exceptions from elsewhere](#exceptions-from-elsewhere)
 - [What to tell the user](#what-to-tell-the-user)
 
+Everything that can go wrong during a login throws an exception. This page lists them all, what each one means, and
+what to tell the user.
+
 ## Catching them
 Methods throw an exception when something goes wrong, rather than returning `false` or `null`. The package's own
 exceptions are in the `Programster\GoogleSso\Exceptions` namespace, and all extend the abstract `ExceptionGoogleSso`

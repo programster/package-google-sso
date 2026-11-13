@@ -7,6 +7,8 @@
 - [How the tests talk to Google](#how-the-tests-talk-to-google)
 - [Writing tests](#writing-tests)
 
+How to run the package's own tests, e.g. when changing the package. You don't need these to use it in your site.
+
 ## Running the tests
 To run the tests on your current version of PHP, run `composer install`, and then:
 

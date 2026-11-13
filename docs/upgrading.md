@@ -10,6 +10,8 @@
     - [Changes in behaviour](#changes-in-behaviour)
     - [New features](#new-features)
 
+What changed in each release, and what, if anything, you need to change in your code when upgrading.
+
 ## From 0.x to 1.0.0
 1.0.0 removes what 0.x deprecated, so first upgrade to the latest 0.x, and fix any deprecation warnings your IDE shows.
 Then:

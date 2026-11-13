@@ -15,6 +15,8 @@
 - [The login page hangs](#the-login-page-hangs)
 - [Composer won't install the package](#composer-wont-install-the-package)
 
+Common errors, from Google's error pages to the package's exceptions, with their usual causes and how to fix them.
+
 ## Google shows "Error 400: redirect_uri_mismatch"
 The `googleCallbackUrl` you gave `GoogleSsoClient` isn't one of the client's authorised redirect URIs. They must match
 exactly, including `http` or `https`, the port, the path, and a trailing slash. Copy the URL from the error's details

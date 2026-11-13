@@ -5,6 +5,8 @@
 - [Choosing an HTTP client](#choosing-an-http-client)
 - [Creating it once](#creating-it-once)
 
+Every option `GoogleSsoClient`'s constructor takes, what each one is for, and which HTTP client to give it.
+
 ## Creating the client
 Everything is set when the `GoogleSsoClient` is created. Only the first six options are needed, and the rest have
 defaults that suit nearly everyone. Named arguments make it clear which is which:

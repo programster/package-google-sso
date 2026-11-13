@@ -4,6 +4,7 @@
 - [Suggesting a Workspace domain (hd)](#suggesting-a-workspace-domain-hd)
 - [Suggesting an account (login_hint)](#suggesting-an-account-login_hint)
 - [Logging in without the user noticing](#logging-in-without-the-user-noticing)
+- [Several login links on one page](#several-login-links-on-one-page)
 
 `createGoogleSsoLoginUrl()` and `createGoogleSsoLoginResponse()` take three optional settings, which change what
 Google shows the user. Each is for that one login URL, so different links (or users) can use different settings.
@@ -98,3 +99,14 @@ catch (ExceptionGoogleLoginError $e)
 
 The errors this covers are `login_required`, `consent_required`, `interaction_required` and
 `account_selection_required`, which are the ones OpenID Connect defines for this.
+
+## Several login links on one page
+Call `createGoogleSsoLoginUrl()` for each one. Within a session, every call returns the same URL (until a callback
+uses up its CSRF token), so all the links work, whichever the user clicks:
+
+```php
+<a href="<?= htmlspecialchars($googleSso->createGoogleSsoLoginUrl()) ?>">Login with Google</a>
+```
+
+To give links different options, such as `prompt`, pass them to each call. The options can differ, as they don't
+change the CSRF token.

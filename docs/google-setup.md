@@ -7,6 +7,9 @@
 - [Testing or in production](#testing-or-in-production)
 - [Keeping the secret safe](#keeping-the-secret-safe)
 
+Before anyone can log in, Google needs to know about your site. This page walks through creating the client ID and
+secret that `GoogleSsoClient` needs, in the Google Cloud console, and setting up the consent screen users see.
+
 ## What you need
 Before users can log in with Google, Google needs to know about your app. This gives you two things to pass to
 `GoogleSsoClient`:

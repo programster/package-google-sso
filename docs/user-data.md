@@ -6,6 +6,9 @@
 - [How the user signed in to Google](#how-the-user-signed-in-to-google)
 - [The rest of the ID token](#the-rest-of-the-id-token)
 
+What `handleGoogleSsoCallback()` gives you about the user: every detail in `GoogleUserData`, which one to identify
+users by, which can be empty, and how to tell whether they signed in to Google with two-step verification.
+
 ## The details
 `handleGoogleSsoCallback()` returns a `GoogleUserData`, which holds the claims from the user's ID token. It can't be
 changed once created.

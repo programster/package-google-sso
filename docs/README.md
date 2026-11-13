@@ -13,4 +13,4 @@
 - [Upgrading](upgrading.md)
 - [Testing](testing.md)
 
-For installation, a quick start, and the most common tasks, see the [main README](../README.md).
+For installation and a quick start, see the [main README](../README.md).

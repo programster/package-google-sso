@@ -8,6 +8,10 @@
 - [Keeping the client secret safe](#keeping-the-client-secret-safe)
 - [Checklist](#checklist)
 
+What the package checks for you, and what is left to your site: matching users to accounts safely, only letting in
+your Google Workspace, requiring two-step verification, and keeping the session and client secret safe. It ends with a
+checklist.
+
 ## What the package does for you
 Everything that is the same for every app is checked before you get the user's details: the CSRF token, PKCE, the
 ID token's signature, expiry, issuer and audience, and Google's responses. See

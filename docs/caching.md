@@ -5,6 +5,9 @@
 - [How long to cache them for](#how-long-to-cache-them-for)
 - [What is cached](#what-is-cached)
 
+Every login needs Google's public certificates, to check the ID token's signature. This page covers caching them, so
+they aren't fetched from Google on every login, and how long to keep them for.
+
 ## Why cache them
 To check an ID token's signature, the package needs Google's public certificates, from
 `https://www.googleapis.com/oauth2/v3/certs`. Without a cache, they are fetched on every login, which adds a request to

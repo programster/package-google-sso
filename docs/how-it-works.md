@@ -6,6 +6,10 @@
 - [The CSRF token (state)](#the-csrf-token-state)
 - [PKCE](#pkce)
 
+What happens between a user clicking "Login with Google" and you getting their details: each step of the login, what
+the package checks along the way, and what is sent to Google. You don't need this to use the package, but it helps
+when something goes wrong.
+
 ## The login, step by step
 The package uses OpenID Connect's "authorization code" flow, which is what Google recommends for a site with a server:
 

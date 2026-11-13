@@ -9,6 +9,10 @@
 - [Writing your own store](#writing-your-own-store)
 - [The session cookie](#the-session-cookie)
 
+How to use the package with Slim, Laravel, Symfony, and long-running servers such as RoadRunner, which mostly comes
+down to where the CSRF token is kept between the user leaving for Google and coming back. Plain PHP sites can use the
+[quick start](../README.md#quick-start) as it is.
+
 ## Where the CSRF token is kept
 The package needs two things from your app: a way to redirect the user, and somewhere to keep the CSRF token for the
 user, in between them leaving for Google and coming back. That "somewhere" is a CSRF token store
