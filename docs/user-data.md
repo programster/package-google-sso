@@ -79,8 +79,9 @@ Before relying on them, know that:
 
 - **Google only sends them when the login asks for them**, and only to apps that are published, verified, and have
   "Authentication strength claims" and "Session age claims" turned on (see Google's
-  [security bundle](https://developers.google.com/identity/siwg/security-bundle)). This version of the package doesn't
-  ask for them yet, so they are empty (`[]` and `0`) for now.
+  [security bundle](https://developers.google.com/identity/siwg/security-bundle)). The login only asks for them when
+  the client's `mfaPolicy` is `MfaPolicyEnum::REPORT` or `REQUIRE` (see
+  [Security](security.md#two-step-verification)). Otherwise, they are empty (`[]` and `0`).
 - **They can be missing even then**, as Google only sends `amr` when it knows how the user signed in. A missing claim
   is never counted as multi-factor authentication: `hasMultiFactorAuthentication()` is `false`.
 - **They describe the user's last sign-in to Google, not this login to your site.** Someone who signed in to Google with

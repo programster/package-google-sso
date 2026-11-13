@@ -12,6 +12,7 @@ use GuzzleHttp\Psr7\HttpFactory;
 use Programster\GoogleSso\CacheConfig;
 use Programster\GoogleSso\CsrfTokenStoreInterface;
 use Programster\GoogleSso\GoogleSsoClient;
+use Programster\GoogleSso\MfaPolicyEnum;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Http\Client\ClientInterface;
 
@@ -61,6 +62,28 @@ final class TestFixtures
             requestFactory: new HttpFactory(),
             httpClient: $httpClient,
             jwtLeewaySeconds: $jwtLeewaySeconds,
+        );
+    }
+
+
+    /**
+     * Create a client that talks to the given fake Google, with the given MFA policy.
+     * @param ClientInterface $httpClient - the fake Google, e.g. from FakeGoogleHttpClient::issuingIdToken().
+     * @param MfaPolicyEnum $mfaPolicy - whether to ask for, and require, multi-factor authentication.
+     * @return GoogleSsoClient
+     */
+    public static function createClientWithMfaPolicy(
+        ClientInterface $httpClient,
+        MfaPolicyEnum $mfaPolicy
+    ) : GoogleSsoClient
+    {
+        return new GoogleSsoClient(
+            clientId: self::CLIENT_ID,
+            clientSecret: self::CLIENT_SECRET,
+            googleCallbackUrl: self::CALLBACK_URL,
+            requestFactory: new HttpFactory(),
+            httpClient: $httpClient,
+            mfaPolicy: $mfaPolicy,
         );
     }
 

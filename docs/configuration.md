@@ -39,6 +39,7 @@ $googleSso = new GoogleSsoClient(
 | `googleOauthUrl` | `"https://oauth2.googleapis.com"` | The base of Google's OAuth endpoints, which `/token` is added to. You shouldn't need to change it. A trailing slash is removed. |
 | `jwtLeewaySeconds` | `60` | How many seconds your server's clock may be out from Google's when checking the ID token's times. Can't be negative. |
 | `csrfTokenStore` | `new NativeSessionCsrfTokenStore()` | Where the CSRF token is kept for the user, between them leaving for Google and coming back. The default keeps it in `$_SESSION`. See [Frameworks and sessions](frameworks.md) for using your framework's session instead. |
+| `mfaPolicy` | `MfaPolicyEnum::IGNORE` | Whether to ask Google how the user signed in (`REPORT`), and refuse users who didn't use multi-factor authentication (`REQUIRE`). See [Security](security.md#two-step-verification). |
 
 ### jwtLeewaySeconds
 An ID token says when it was issued (`iat`) and when it expires (`exp`), an hour later. If your server's clock is

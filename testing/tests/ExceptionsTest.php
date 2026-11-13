@@ -12,6 +12,7 @@ use Programster\GoogleSso\Exceptions\ExceptionCsrfTokenMismatch;
 use Programster\GoogleSso\Exceptions\ExceptionGoogleLoginError;
 use Programster\GoogleSso\Exceptions\ExceptionGoogleSso;
 use Programster\GoogleSso\Exceptions\ExceptionInvalidIdToken;
+use Programster\GoogleSso\Exceptions\ExceptionMfaRequired;
 use Programster\GoogleSso\Exceptions\ExceptionMissingCallbackParameter;
 use Programster\GoogleSso\Exceptions\ExceptionMissingCsrfToken;
 use Programster\GoogleSso\Exceptions\ExceptionUnexpectedResponse;
@@ -24,6 +25,7 @@ $testCommonBase = function () : void {
         new ExceptionMissingCsrfToken("state"),
         new ExceptionGoogleLoginError("access_denied"),
         new ExceptionInvalidIdToken("bad token"),
+        new ExceptionMfaRequired(["pwd"]),
         new ExceptionMissingCallbackParameter("code"),
         new ExceptionUnexpectedResponse(new Response(500)),
     ];

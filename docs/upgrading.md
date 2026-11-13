@@ -19,9 +19,11 @@ Nothing has been removed or changed in a way that needs your code to change.
   `(HTTP 400, error: invalid_grant - Bad Request)`.
 - **`GoogleUserData` reads how the user signed in to Google**: `getAuthenticationMethods()` and `getAuthTime()`, for
   Google's `amr` and `auth_time` claims, with `hasAuthenticationMethod()`, `hasMultiFactorAuthentication()` and
-  `AuthenticationMethodEnum`. Google only sends these claims when the login asks for them, which the package doesn't
-  do yet, so they are empty for now. See
-  [How the user signed in to Google](user-data.md#how-the-user-signed-in-to-google).
+  `AuthenticationMethodEnum`. See [How the user signed in to Google](user-data.md#how-the-user-signed-in-to-google).
+- **The new `mfaPolicy` constructor option** asks Google for those claims (`MfaPolicyEnum::REPORT`), and can refuse
+  users who didn't sign in with multi-factor authentication (`REQUIRE`), with an `ExceptionMfaRequired`. It defaults to
+  `IGNORE`, which doesn't ask, so nothing changes unless you set it. See
+  [Security](security.md#two-step-verification).
 
 ## From 0.2.0 to 0.3.0
 Nothing has been removed or changed in a way that needs your code to change.

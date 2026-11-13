@@ -8,6 +8,7 @@
 - [ExceptionUnexpectedResponse with invalid_grant or redirect_uri_mismatch](#exceptionunexpectedresponse-with-invalid_grant-or-redirect_uri_mismatch)
 - [ExceptionUnexpectedResponse with invalid_client or unauthorized_client](#exceptionunexpectedresponse-with-invalid_client-or-unauthorized_client)
 - [ExceptionInvalidIdToken about the aud claim](#exceptioninvalididtoken-about-the-aud-claim)
+- [ExceptionMfaRequired for everyone](#exceptionmfarequired-for-everyone)
 - [BeforeValidException or ExpiredException](#beforevalidexception-or-expiredexception)
 - [UnexpectedValueException saying "kid" is invalid](#unexpectedvalueexception-saying-kid-is-invalid)
 - [The login page hangs](#the-login-page-hangs)
@@ -85,6 +86,16 @@ been deleted or replaced, and that there's no whitespace or newline around them 
 ## ExceptionInvalidIdToken about the aud claim
 The ID token was issued to a different client from the `clientId` you gave `GoogleSsoClient`. If you have several
 clients (e.g. one for development and one for production), check the client ID and secret are from the same one.
+
+## ExceptionMfaRequired for everyone
+If `getAuthenticationMethods()` on the exception is empty, Google isn't telling your app how users signed in. It only
+does for apps that are published ("In production"), verified, and have "Authentication strength claims" turned on, in
+the Google Auth Platform's settings (see Google's
+[security bundle](https://developers.google.com/identity/siwg/security-bundle)). Until then, switch `mfaPolicy` to
+`MfaPolicyEnum::REPORT`, so nobody is refused.
+
+If it has values, such as `["pwd"]`, those users signed in to Google with only a password. They need to turn on 2-Step
+Verification for their Google account, and then sign out of Google and in again, as it describes their last sign-in.
 
 ## BeforeValidException or ExpiredException
 The ID token's times don't match your server's clock. ID tokens last an hour, and are checked straight away, so this

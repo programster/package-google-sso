@@ -9,6 +9,7 @@ use Firebase\JWT\JWT;
 use Programster\GoogleSso\Exceptions\ExceptionCsrfTokenMismatch;
 use Programster\GoogleSso\Exceptions\ExceptionGoogleLoginError;
 use Programster\GoogleSso\Exceptions\ExceptionInvalidIdToken;
+use Programster\GoogleSso\Exceptions\ExceptionMfaRequired;
 use Programster\GoogleSso\Exceptions\ExceptionMissingCallbackParameter;
 use Programster\GoogleSso\Exceptions\ExceptionMissingCsrfToken;
 use Programster\GoogleSso\Exceptions\ExceptionUnexpectedResponse;
@@ -35,6 +36,7 @@ class GoogleSsoClient
     private readonly string $m_googleJwtCertsUrl;
     private readonly string $m_googleOauthUrl;
     private readonly int $m_jwtLeewaySeconds;
+    private readonly MfaPolicyEnum $m_mfaPolicy;
 
 
     /**
@@ -76,6 +78,10 @@ class GoogleSsoClient
      * leaving for Google and coming back. Defaults to $_SESSION. Pass your own to use your framework's session instead,
      * e.g. Laravel's, which doesn't use $_SESSION.
      *
+     * @param MfaPolicyEnum $mfaPolicy - whether to ask Google how the user signed in to their Google account (REPORT),
+     * and refuse users who didn't use multi-factor authentication (REQUIRE). Google only says for apps it has
+     * verified, with "Authentication strength claims" turned on. Defaults to IGNORE, which doesn't ask.
+     *
      * @throws \InvalidArgumentException - if $jwtLeewaySeconds is negative, or $sessionCsrfTokenKey is given along
      * with a $csrfTokenStore that it can't apply to.
      */
@@ -91,6 +97,7 @@ class GoogleSsoClient
         string $googleOauthUrl = "https://oauth2.googleapis.com",
         int $jwtLeewaySeconds = 60,
         CsrfTokenStoreInterface $csrfTokenStore = new NativeSessionCsrfTokenStore(),
+        MfaPolicyEnum $mfaPolicy = MfaPolicyEnum::IGNORE,
     )
     {
         if ($jwtLeewaySeconds < 0)
@@ -133,6 +140,7 @@ class GoogleSsoClient
         $this->m_googleJwtCertsUrl = $googleJwtCertsUrl;
         $this->m_googleOauthUrl = rtrim($googleOauthUrl, "/");
         $this->m_jwtLeewaySeconds = $jwtLeewaySeconds;
+        $this->m_mfaPolicy = $mfaPolicy;
     }
 
 
@@ -222,6 +230,14 @@ class GoogleSsoClient
             'code_challenge_method' => 'S256',
         ];
 
+        if ($this->m_mfaPolicy !== MfaPolicyEnum::IGNORE)
+        {
+            // ask for how and when the user signed in to Google, which Google only sends when asked
+            // https://developers.google.com/identity/siwg/security-bundle
+            $sessionClaims = ['id_token' => ['amr' => ['essential' => true], 'auth_time' => ['essential' => true]]];
+            $queryParameters['claims'] = json_encode($sessionClaims, JSON_THROW_ON_ERROR);
+        }
+
         $queryParameters += $optionalParameters;
         return "https://accounts.google.com/o/oauth2/auth?" . http_build_query($queryParameters);
     }
@@ -234,7 +250,8 @@ class GoogleSsoClient
      *
      * This checks the state against the stored CSRF token (which is then used up, whether it matched or not),
      * trades the code for an ID token (with the PKCE code verifier), and checks the ID token's signature, expiry,
-     * issuer and audience.
+     * issuer and audience. With MfaPolicyEnum::REQUIRE, it also checks that the user signed in to Google with
+     * multi-factor authentication.
      *
      * This does NOT check that the user's email address has been verified. If you match users to accounts by email,
      * check getEmailVerified() on the result first.
@@ -249,6 +266,7 @@ class GoogleSsoClient
      * @throws ExceptionCsrfTokenMismatch - if the state doesn't match the stored CSRF token.
      * @throws ExceptionUnexpectedResponse - if Google's token or certificate endpoints responded with an error.
      * @throws ExceptionInvalidIdToken - if the ID token wasn't issued by Google, or to this client.
+     * @throws ExceptionMfaRequired - with MfaPolicyEnum::REQUIRE, if Google doesn't say the user used MFA.
      * @throws \UnexpectedValueException - if php-jwt rejects the ID token, e.g. a bad signature, or it has expired.
      * @throws \Psr\Cache\InvalidArgumentException
      * @throws \Psr\Http\Client\ClientExceptionInterface
@@ -279,7 +297,14 @@ class GoogleSsoClient
 
         $code = self::getRequiredQueryParameter($queryParameters, "code");
         $idToken = $this->exchangeCodeForIdToken($code, $this->createPkceCodeVerifier($state));
-        return $this->decodeIdToken($idToken);
+        $googleUser = $this->decodeIdToken($idToken);
+
+        if ($this->m_mfaPolicy === MfaPolicyEnum::REQUIRE && !$googleUser->hasMultiFactorAuthentication())
+        {
+            throw new ExceptionMfaRequired($googleUser->getAuthenticationMethods());
+        }
+
+        return $googleUser;
     }
 
 
@@ -302,6 +327,7 @@ class GoogleSsoClient
      * @throws ExceptionCsrfTokenMismatch
      * @throws ExceptionUnexpectedResponse
      * @throws ExceptionInvalidIdToken
+     * @throws ExceptionMfaRequired
      * @throws \Psr\Cache\InvalidArgumentException
      * @throws \Psr\Http\Client\ClientExceptionInterface
      */

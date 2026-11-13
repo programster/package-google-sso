@@ -71,6 +71,7 @@ Before you get a `GoogleUserData`, the package checks:
 | Its `iss` is `accounts.google.com` or `https://accounts.google.com` | Stops a token from another issuer being accepted | `ExceptionInvalidIdToken` |
 | Its `aud` is your client ID | Stops a token that Google issued to another app being accepted | `ExceptionInvalidIdToken` |
 | It has the claims Google always includes (`sub`, `email`, etc.) | Stops you getting a half-filled object | `ExceptionInvalidIdToken` |
+| With `MfaPolicyEnum::REQUIRE`, the user signed in to Google with multi-factor authentication | Lets you refuse accounts protected only by a password | `ExceptionMfaRequired` |
 
 What isn't checked is up to you, as it depends on your app: whether the email address has been verified, and which
 domain the user is from. See [Security](security.md).
