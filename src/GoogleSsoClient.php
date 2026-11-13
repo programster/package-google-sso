@@ -1,17 +1,40 @@
 <?php
 
+declare(strict_types = 1);
 
 namespace Programster\GoogleSso;
 
+use Firebase\JWT\JWK;
+use Firebase\JWT\JWT;
 use Programster\GoogleSso\Exceptions\ExceptionCsrfTokenMismatch;
+use Programster\GoogleSso\Exceptions\ExceptionGoogleLoginError;
+use Programster\GoogleSso\Exceptions\ExceptionInvalidIdToken;
+use Programster\GoogleSso\Exceptions\ExceptionMissingCallbackParameter;
+use Programster\GoogleSso\Exceptions\ExceptionMissingCsrfToken;
 use Programster\GoogleSso\Exceptions\ExceptionUnexpectedResponse;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\ResponseInterface;
 use Random\RandomException;
 
 class GoogleSsoClient
 {
-    private string $googleOauthUrl;
+    /**
+     * The values Google may put in an ID token's "iss" claim.
+     * https://developers.google.com/identity/openid-connect/openid-connect#validatinganidtoken
+     */
+    private const VALID_ISSUERS = ["accounts.google.com", "https://accounts.google.com"];
+
+    private readonly string $m_clientId;
+    private readonly string $m_clientSecret;
+    private readonly string $m_googleCallbackUrl;
+    private readonly RequestFactoryInterface $m_requestFactory;
+    private readonly ClientInterface $m_httpClient;
+    private readonly ?CacheConfig $m_cacheConfig;
+    private readonly CsrfTokenStoreInterface $m_csrfTokenStore;
+    private readonly string $m_googleJwtCertsUrl;
+    private readonly string $m_googleOauthUrl;
+    private readonly int $m_jwtLeewaySeconds;
 
 
     /**
@@ -26,53 +49,102 @@ class GoogleSsoClient
      * your site's FQDN, with the relevant path such as. https://mydomain.com/sso/login-handler
      *
      * @param RequestFactoryInterface $requestFactory - the factory you wish to use for creating HTTP requests, which
-     * we will use for sending a POST request to Google. We recommend \GuzzleHttp\Psr7\HttpFactory().
+     * we will use for sending requests to Google. We recommend \GuzzleHttp\Psr7\HttpFactory().
      *
-     * @param ClientInterface $httpClient - the HTTP client you wish to use for sending/recieving messages
-     * to Google. We recommend \GuzzleHttp\Client().
+     * @param ClientInterface $httpClient - the HTTP client you wish to use for sending/receiving messages
+     * to Google, including fetching Google's certificates. We recommend \GuzzleHttp\Client().
      *
      * @param CacheConfig|null $cacheConfig - optionally provide a configuration for caching, for us to cache the result
      * of fetching the Google SSO certificate information, so that the server does not have to look this up every time
      * a user logs in. This improves performance at the cost of extra setup/configuration.
      *
-     * @param string $sessionCsrfTokenKey - the key that will be used for storing a CSRF token in the session for the
-     * user. This will default to googleSsoCsrfToken by default, but you can override this if your application would
-     * needs to use the key for something else elsewhere, which seems extremely unlikely..
+     * @param string $sessionCsrfTokenKey - deprecated: pass new NativeSessionCsrfTokenStore($key) as $csrfTokenStore
+     * instead. The $_SESSION key the CSRF token is kept under, which defaults to googleSsoCsrfToken. It can't be used
+     * with a $csrfTokenStore of your own, which decides for itself where the token is kept.
      *
      * @param string $googleJwtCertsUrl - where google's JWT public key data is held, which we will use to verify that
-     * the JWT we recieved on our handler is actually from Google, and someone isn't trying to hack their way in with
+     * the JWT we received on our handler is actually from Google, and someone isn't trying to hack their way in with
      * a made up JWT that wasn't from Google.
      *
      * @param string $googleOauthUrl - the base of all of the Oauth2 endpoints for Google. You shouldn't need to
      * override this, but this is here just in case it changes and I fail to update this package in time.
+     *
+     * @param int $jwtLeewaySeconds - how many seconds this server's clock may be out from Google's, when checking the
+     * ID token's issued-at and expiry times. Defaults to 60.
+     *
+     * @param CsrfTokenStoreInterface $csrfTokenStore - where to keep the CSRF token for the current user, between them
+     * leaving for Google and coming back. Defaults to $_SESSION. Pass your own to use your framework's session instead,
+     * e.g. Laravel's, which doesn't use $_SESSION.
+     *
+     * @throws \InvalidArgumentException - if $jwtLeewaySeconds is negative, or $sessionCsrfTokenKey is given along
+     * with a $csrfTokenStore that it can't apply to.
      */
     public function __construct(
-        private readonly string $clientId,
-        private readonly string $clientSecret,
-        private readonly string $googleCallbackUrl,
-        private readonly RequestFactoryInterface $requestFactory,
-        private readonly ClientInterface $httpClient,
-        private readonly ?CacheConfig $cacheConfig = null,
-        private readonly string $sessionCsrfTokenKey = "googleSsoCsrfToken",
-        private readonly string $googleJwtCertsUrl = "https://www.googleapis.com/oauth2/v3/certs",
+        string $clientId,
+        string $clientSecret,
+        string $googleCallbackUrl,
+        RequestFactoryInterface $requestFactory,
+        ClientInterface $httpClient,
+        ?CacheConfig $cacheConfig = null,
+        string $sessionCsrfTokenKey = NativeSessionCsrfTokenStore::DEFAULT_KEY,
+        string $googleJwtCertsUrl = "https://www.googleapis.com/oauth2/v3/certs",
         string $googleOauthUrl = "https://oauth2.googleapis.com",
+        int $jwtLeewaySeconds = 60,
+        CsrfTokenStoreInterface $csrfTokenStore = new NativeSessionCsrfTokenStore(),
     )
     {
-        // ensure $googleOauthUrl does not end in / and strip it off if it does.
-        if (substr($googleOauthUrl, -1) === "/")
+        if ($jwtLeewaySeconds < 0)
         {
-            $googleOauthUrl = substr($googleOauthUrl, 0, -1);
+            throw new \InvalidArgumentException("The JWT leeway can't be negative, but {$jwtLeewaySeconds} was given.");
         }
 
-        $this->googleOauthUrl = $googleOauthUrl;
+        // The deprecated $sessionCsrfTokenKey only means anything to a native session store, so it must not be ignored.
+        $isNativeStore = ($csrfTokenStore instanceof NativeSessionCsrfTokenStore);
+        $nativeStoreKey = $isNativeStore ? $csrfTokenStore->getKey() : "";
+
+        if (
+               $sessionCsrfTokenKey === NativeSessionCsrfTokenStore::DEFAULT_KEY
+            || $nativeStoreKey === $sessionCsrfTokenKey
+        )
+        {
+            $this->m_csrfTokenStore = $csrfTokenStore;
+        }
+        elseif ($nativeStoreKey === NativeSessionCsrfTokenStore::DEFAULT_KEY)
+        {
+            $this->m_csrfTokenStore = new NativeSessionCsrfTokenStore($sessionCsrfTokenKey);
+        }
+        else
+        {
+            $message = (
+                "sessionCsrfTokenKey can't be used with a csrfTokenStore of your own, which decides where the token is"
+                . " kept. To keep it in \$_SESSION under that key, pass"
+                . " new NativeSessionCsrfTokenStore(\"{$sessionCsrfTokenKey}\") as the csrfTokenStore instead."
+            );
+
+            throw new \InvalidArgumentException($message);
+        }
+
+        $this->m_clientId = $clientId;
+        $this->m_clientSecret = $clientSecret;
+        $this->m_googleCallbackUrl = $googleCallbackUrl;
+        $this->m_requestFactory = $requestFactory;
+        $this->m_httpClient = $httpClient;
+        $this->m_cacheConfig = $cacheConfig;
+        $this->m_googleJwtCertsUrl = $googleJwtCertsUrl;
+        $this->m_googleOauthUrl = rtrim($googleOauthUrl, "/");
+        $this->m_jwtLeewaySeconds = $jwtLeewaySeconds;
     }
 
 
     /**
      * Send the user's browser to the Google SSO login page, where the user logs in, or if already logged in
-     * just confirms they wish to allow our applicaton to know about them.
-     * @return void
-     * @throws \Random\RandomException
+     * just confirms they wish to allow our application to know about them. This sends a header and exits, so it
+     * doesn't suit PSR-7 frameworks (such as Slim), where you should instead redirect to the URL from
+     * createGoogleSsoLoginUrl() through your response object.
+     *
+     * @return never
+     *
+     * @throws RandomException
      */
     public function sendUserToGoogleLogin() : never
     {
@@ -83,60 +155,117 @@ class GoogleSsoClient
 
 
     /**
-     * Create and return the URL that a user can go to in order to start the "Login with Google" flow.
+     * Create and return the URL that a user can go to in order to start the "Login with Google" flow. The CSRF token is
+     * kept in the CSRF token store, so with the default store, the session must have been started first. Calling this
+     * more than once for the same user (e.g. for several links on a page) reuses the same token, until a callback uses
+     * it up.
+     *
      * @return string - a Google URL the user needs to go to, in order to login with Google.
+     *
      * @throws RandomException
      */
     public function createGoogleSsoLoginUrl() : string
     {
-        // generate the URL only once, and return existing one if already created. This will avoid issues from if
-        // the implementor calls this method multiple times, for multiple links on a page etc.
-        static $generatedUrl = null;
+        $existingToken = $this->m_csrfTokenStore->getToken();
 
-        if ($generatedUrl === null)
+        if ($existingToken !== "")
         {
-            // create a CSRF token and store it locally
-            $randomToken = bin2hex(random_bytes(16));
-            $_SESSION[$this->sessionCsrfTokenKey] = $randomToken;
-
-            // info about scopes
-            // https://developers.google.com/identity/protocols/oauth2/scopes
-            $scopes = implode(" ", ["email", "openid", "profile"]);
-
-            $queryParameters = [
-                'scope' => $scopes,
-                'response_type' => 'code',
-                'access_type' => "offline",
-                'state' => $randomToken,
-                'redirect_uri' => $this->googleCallbackUrl,
-                'client_id' => $this->clientId,
-            ];
-
-            $generatedUrl = "https://accounts.google.com/o/oauth2/auth?" . http_build_query($queryParameters);
+            $stateToken = $existingToken;
+        }
+        else
+        {
+            $stateToken = bin2hex(random_bytes(16));
+            $this->m_csrfTokenStore->setToken($stateToken);
         }
 
-        return $generatedUrl;
+        // info about scopes
+        // https://developers.google.com/identity/protocols/oauth2/scopes
+        $queryParameters = [
+            'scope' => implode(" ", ["email", "openid", "profile"]),
+            'response_type' => 'code',
+            'state' => $stateToken,
+            'redirect_uri' => $this->m_googleCallbackUrl,
+            'client_id' => $this->m_clientId,
+        ];
+
+        return "https://accounts.google.com/o/oauth2/auth?" . http_build_query($queryParameters);
     }
 
 
     /**
-     * Method to handle Google redirecting the user back to your site after the user has logged in.
-     * This should be implemented on the endpoint that you provided google to send users to, and you
-     * provided as $googleCallbackUrl for this object's constructor. Google will have provided
-     * you with "code" and "state" query parameters in the user's browser URL, which we can use
-     * to trade in our backend for the actual information about the user.
+     * Handle Google redirecting the user back to your site after they have logged in (or cancelled). Call this on the
+     * endpoint you gave as $googleCallbackUrl, passing it the request's query parameters, e.g. $_GET, or
+     * $request->getQueryParams() in a PSR-7 framework.
      *
-     * @param string|null $code - optionally provide the code that Google provided in the URL. If not provided,
-     * then this method will get it using the $_GET superglobal. Hence, this is only required if your application or
-     * framework interferes with that superglobal.
+     * This checks the state against the stored CSRF token (which is then used up, whether it matched or not),
+     * trades the code for an ID token, and checks the ID token's signature, expiry, issuer and audience.
      *
-     * @param string|null $state - optionally provide the "state" that Google provided in the URL. If not provided,
-     *  then this method will get it using the $_GET superglobal. Hence, this is only required if your application or
-     *  framework interferes with that superglobal.
+     * This does NOT check that the user's email address has been verified. If you match users to accounts by email,
+     * check getEmailVerified() on the result first.
+     *
+     * @param array<string, mixed> $queryParameters - the callback request's query parameters.
      *
      * @return GoogleUserData
+     *
+     * @throws ExceptionGoogleLoginError - if Google sent back an error, e.g. the user cancelled (access_denied).
+     * @throws ExceptionMissingCallbackParameter - if the state or code is missing.
+     * @throws ExceptionMissingCsrfToken - if there was no stored CSRF token, e.g. the session wasn't started.
+     * @throws ExceptionCsrfTokenMismatch - if the state doesn't match the stored CSRF token.
+     * @throws ExceptionUnexpectedResponse - if Google's token or certificate endpoints responded with an error.
+     * @throws ExceptionInvalidIdToken - if the ID token wasn't issued by Google, or to this client.
+     * @throws \UnexpectedValueException - if php-jwt rejects the ID token, e.g. a bad signature, or it has expired.
+     * @throws \Psr\Cache\InvalidArgumentException
+     * @throws \Psr\Http\Client\ClientExceptionInterface
+     */
+    public function handleGoogleSsoCallback(array $queryParameters) : GoogleUserData
+    {
+        // use up the stored token straight away, so it can't be used by another callback, whatever happens next
+        $sessionToken = $this->m_csrfTokenStore->getToken();
+        $this->m_csrfTokenStore->removeToken();
+
+        if (isset($queryParameters['error']))
+        {
+            $error = is_string($queryParameters['error']) ? $queryParameters['error'] : "unknown";
+            throw new ExceptionGoogleLoginError($error);
+        }
+
+        $state = self::getRequiredQueryParameter($queryParameters, "state");
+
+        if ($sessionToken === "")
+        {
+            throw new ExceptionMissingCsrfToken($state);
+        }
+
+        if (!hash_equals($sessionToken, $state))
+        {
+            throw new ExceptionCsrfTokenMismatch($state, $sessionToken);
+        }
+
+        $code = self::getRequiredQueryParameter($queryParameters, "code");
+        $idToken = $this->exchangeCodeForIdToken($code);
+        return $this->decodeIdToken($idToken);
+    }
+
+
+    /**
+     * Handle Google redirecting the user back to your site after the user has logged in, reading the query parameters
+     * from $_GET.
+     *
+     * @deprecated - use handleGoogleSsoCallback() instead, passing it $_GET or your framework's query parameters.
+     *
+     * @param string|null $code - optionally provide the code that Google provided in the URL, instead of it being
+     * read from $_GET.
+     *
+     * @param string|null $state - optionally provide the "state" that Google provided in the URL, instead of it being
+     * read from $_GET.
+     *
+     * @return GoogleUserData
+     *
+     * @throws ExceptionGoogleLoginError
+     * @throws ExceptionMissingCallbackParameter
      * @throws ExceptionCsrfTokenMismatch
      * @throws ExceptionUnexpectedResponse
+     * @throws ExceptionInvalidIdToken
      * @throws \Psr\Cache\InvalidArgumentException
      * @throws \Psr\Http\Client\ClientExceptionInterface
      */
@@ -145,97 +274,221 @@ class GoogleSsoClient
         ?string $state = null,
     ) : GoogleUserData
     {
-        if ($code === null)
+        $queryParameters = $_GET;
+
+        if ($code !== null)
         {
-            // handle google response with oauth code.
-            $code = $_GET['code'];
+            $queryParameters['code'] = $code;
         }
 
-        if ($state === null)
+        if ($state !== null)
         {
-            // handle google response with oauth code.
-            $state = $_GET['state'];
+            $queryParameters['state'] = $state;
         }
 
-        if ($state !== $_SESSION[$this->sessionCsrfTokenKey])
-        {
-            throw new ExceptionCsrfTokenMismatch($state, $_SESSION[$this->sessionCsrfTokenKey]);
-        }
-
-        $parameters = [
-            'grant_type' => "authorization_code",
-            'code' => $code,
-            'client_id' =>  $this->clientId,
-            'client_secret' => $this->clientSecret,
-            'redirect_uri' => $this->googleCallbackUrl,
-        ];
-
-        // send code off to google to trade the code for auth token
-        $url = $this->googleOauthUrl . "/token";
-        $request = $this->requestFactory->createRequest("POST", $url);
-        $request->getBody()->write(json_encode($parameters));
-        $request = $request->withHeader("Content-Type", "application/json");
-        $response = $this->httpClient->sendRequest($request);
-        $responseBody = $response->getBody()->getContents();
-
-        try
-        {
-            $responseArray = json_decode(json: $responseBody, associative: true, flags: JSON_THROW_ON_ERROR);
-        }
-        catch(\Exception $e)
-        {
-            throw new ExceptionUnexpectedResponse($response);
-        }
-
-        $accessToken = $responseArray['access_token'];
-        $expiresIn = $responseArray['expires_in'];
-        $expiry = time() + $expiresIn;
-        $scope = $responseArray['scope'];
-        $tokenType = $responseArray['token_type'];
-        $idToken = $responseArray['id_token'];
-
-        // googles public jwk: https://www.googleapis.com/oauth2/v3/certs
-        // verify it using firebase/jwt
-        $jsonWebKeys = $this->getGoogleJwtCertKeys();
-        $firebaseKeys = \Firebase\JWT\JWK::parseKeySet($jsonWebKeys);
-        $jwt = \Firebase\JWT\JWT::decode($idToken, $firebaseKeys); // throws SignatureInvalidException if invalid signature given
-        return GoogleUserData::createFromJwt($jwt);
+        return $this->handleGoogleSsoCallback($queryParameters);
     }
 
 
     /**
-     * Get the array for the JWT certificates that we should use to verify the keys. This method will fetch
-     * the data from the internet if no cache system is enabled, or if the cached valu has expired.
-     * @return array
-     * @throws \Psr\Cache\InvalidArgumentException
+     * Trade the code Google gave the user for the ID token.
+     * @throws ExceptionUnexpectedResponse
+     * @throws \Psr\Http\Client\ClientExceptionInterface
      */
-    private function getGoogleJwtCertKeys() : array
+    private function exchangeCodeForIdToken(string $code) : string
     {
-        if ($this->cacheConfig !== null)
-        {
-            $cachePool = $this->cacheConfig->getCacheItemPool();
-            $item = $cachePool->getItem($this->cacheConfig->getCacheKey());
+        $parameters = [
+            'grant_type' => "authorization_code",
+            'code' => $code,
+            'client_id' => $this->m_clientId,
+            'client_secret' => $this->m_clientSecret,
+            'redirect_uri' => $this->m_googleCallbackUrl,
+        ];
 
-            if ($item->isHit())
-            {
-                $certsString = $item->get();
-            }
-            else
-            {
-                $certsString = file_get_contents($this->googleJwtCertsUrl);
-                $item->set($certsString);
-                $item->expiresAfter($this->cacheConfig->getJwtCachePeriod());
-                $cachePool->save($item);
-            }
-        }
-        else
+        $request = $this->m_requestFactory->createRequest("POST", $this->m_googleOauthUrl . "/token");
+        $request->getBody()->write(http_build_query($parameters));
+
+        $request = $request
+            ->withHeader("Content-Type", "application/x-www-form-urlencoded")
+            ->withHeader("Accept", "application/json");
+
+        $response = $this->m_httpClient->sendRequest($request);
+        $responseArray = self::decodeJsonResponse($response);
+
+        if (
+               $response->getStatusCode() !== 200
+            || !isset($responseArray['id_token'])
+            || !is_string($responseArray['id_token'])
+        )
         {
-            $certsString = file_get_contents($this->googleJwtCertsUrl);
+            $error = is_string($responseArray['error'] ?? null) ? $responseArray['error'] : "no error given";
+            $statusCode = $response->getStatusCode();
+            $message = "Google's token endpoint didn't return an ID token (HTTP {$statusCode}, error: {$error}).";
+            throw new ExceptionUnexpectedResponse($response, $message);
         }
 
-        return json_decode($certsString, true);
+        return $responseArray['id_token'];
     }
 
 
+    /**
+     * Check the ID token's signature and expiry, and that it was issued by Google to this client.
+     * @throws ExceptionInvalidIdToken
+     * @throws ExceptionUnexpectedResponse
+     * @throws \Psr\Cache\InvalidArgumentException
+     * @throws \Psr\Http\Client\ClientExceptionInterface
+     */
+    private function decodeIdToken(string $idToken) : GoogleUserData
+    {
+        $keys = JWK::parseKeySet($this->getGoogleJwtCertKeys());
 
+        // php-jwt's leeway is static, so put it back afterwards, rather than changing it for the rest of the process
+        $previousLeeway = JWT::$leeway;
+        JWT::$leeway = $this->m_jwtLeewaySeconds;
+
+        try
+        {
+            $claims = JWT::decode($idToken, $keys);
+        }
+        finally
+        {
+            JWT::$leeway = $previousLeeway;
+        }
+
+        if (!isset($claims->iss) || !in_array($claims->iss, self::VALID_ISSUERS, true))
+        {
+            throw new ExceptionInvalidIdToken("The ID token wasn't issued by Google (its iss claim is wrong).");
+        }
+
+        if (!isset($claims->aud) || $claims->aud !== $this->m_clientId)
+        {
+            $message = "The ID token was issued to a different client (its aud claim is wrong).";
+            throw new ExceptionInvalidIdToken($message);
+        }
+
+        return GoogleUserData::createFromJwt($claims);
+    }
+
+
+    /**
+     * Get the key set for the JWT certificates that we should use to verify the ID token. This method will fetch
+     * the data from Google if no cache system is enabled, or if the cached value has expired.
+     *
+     * @return array<string, mixed> - the decoded JWK set.
+     *
+     * @throws ExceptionUnexpectedResponse
+     * @throws \Psr\Cache\InvalidArgumentException
+     * @throws \Psr\Http\Client\ClientExceptionInterface
+     */
+    private function getGoogleJwtCertKeys() : array
+    {
+        if ($this->m_cacheConfig === null)
+        {
+            $keySet = $this->fetchGoogleJwtCertKeys();
+        }
+        else
+        {
+            $cachePool = $this->m_cacheConfig->getCacheItemPool();
+            $item = $cachePool->getItem($this->m_cacheConfig->getCacheKey());
+            $cachedKeySet = $item->isHit() ? self::decodeKeySet($item->get()) : [];
+
+            if ($cachedKeySet !== [])
+            {
+                $keySet = $cachedKeySet;
+            }
+            else
+            {
+                $keySet = $this->fetchGoogleJwtCertKeys();
+                $item->set(json_encode($keySet, JSON_THROW_ON_ERROR));
+                $item->expiresAfter($this->m_cacheConfig->getJwtCachePeriod());
+                $cachePool->save($item);
+            }
+        }
+
+        return $keySet;
+    }
+
+
+    /**
+     * Fetch Google's JWT certificates, using the injected HTTP client.
+     * @return array<string, mixed> - the decoded JWK set.
+     * @throws ExceptionUnexpectedResponse
+     * @throws \Psr\Http\Client\ClientExceptionInterface
+     */
+    private function fetchGoogleJwtCertKeys() : array
+    {
+        $request = $this->m_requestFactory->createRequest("GET", $this->m_googleJwtCertsUrl);
+        $response = $this->m_httpClient->sendRequest($request->withHeader("Accept", "application/json"));
+        $keySet = self::decodeKeySet((string)$response->getBody());
+
+        if ($response->getStatusCode() !== 200 || $keySet === [])
+        {
+            $statusCode = $response->getStatusCode();
+            $message = "Google's certificates endpoint returned HTTP {$statusCode} without a valid key set.";
+            throw new ExceptionUnexpectedResponse($response, $message);
+        }
+
+        return $keySet;
+    }
+
+
+    /**
+     * Decode a JSON response body into an array.
+     * @return array<mixed>
+     * @throws ExceptionUnexpectedResponse - if the body isn't a JSON object or array.
+     */
+    private static function decodeJsonResponse(ResponseInterface $response) : array
+    {
+        try
+        {
+            $decoded = json_decode(json: (string)$response->getBody(), associative: true, flags: JSON_THROW_ON_ERROR);
+        }
+        catch (\JsonException $e)
+        {
+            throw new ExceptionUnexpectedResponse($response, "Google's response wasn't valid JSON.");
+        }
+
+        if (!is_array($decoded))
+        {
+            throw new ExceptionUnexpectedResponse($response, "Google's response wasn't a JSON object.");
+        }
+
+        return $decoded;
+    }
+
+
+    /**
+     * Decode a JWK set from JSON (fetched, or cached by this or an earlier version of this package).
+     * @param mixed $json - the JSON. Anything other than a string (e.g. a corrupt cache entry) counts as invalid.
+     * @return array<string, mixed> - the decoded key set, or an empty array if it isn't a valid key set.
+     */
+    private static function decodeKeySet(mixed $json) : array
+    {
+        $decoded = is_string($json) ? json_decode($json, true) : null;
+
+        $isValid = (
+               is_array($decoded)
+            && isset($decoded['keys'])
+            && is_array($decoded['keys'])
+            && $decoded['keys'] !== []
+        );
+
+        return $isValid ? $decoded : [];
+    }
+
+
+    /**
+     * Get a query parameter that Google always sends to the callback.
+     * @param array<string, mixed> $queryParameters
+     * @throws ExceptionMissingCallbackParameter - if it's missing, empty, or not a string (e.g. "?code[]=").
+     */
+    private static function getRequiredQueryParameter(array $queryParameters, string $name) : string
+    {
+        if (!isset($queryParameters[$name]) || !is_string($queryParameters[$name]) || $queryParameters[$name] === "")
+        {
+            throw new ExceptionMissingCallbackParameter($name);
+        }
+
+        return $queryParameters[$name];
+    }
 }
