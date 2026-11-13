@@ -23,6 +23,9 @@ final readonly class GoogleUserData
     private string $m_pictureUrl;
     private int $m_expiry;
     private int $m_issuedAt;
+    # The raw values of the "amr" claim, e.g. ["pwd", "mfa"], or [] if Google didn't send it.
+    private array $m_authenticationMethods;
+    private int $m_authTime;
     # Every claim in the ID token, as Google sent them (so unchecked), keyed by name. See getClaims().
     private array $m_claims;
 
@@ -42,6 +45,8 @@ final readonly class GoogleUserData
         string $pictureUrl,
         int $expiry,
         int $issuedAt,
+        array $authenticationMethods,
+        int $authTime,
         array $claims,
     )
     {
@@ -59,13 +64,16 @@ final readonly class GoogleUserData
         $this->m_pictureUrl = $pictureUrl;
         $this->m_expiry = $expiry;
         $this->m_issuedAt = $issuedAt;
+        $this->m_authenticationMethods = $authenticationMethods;
+        $this->m_authTime = $authTime;
         $this->m_claims = $claims;
     }
 
 
     /**
      * Create a GoogleUserData object from the decoded claims of the ID token that Google provided. Claims that Google
-     * leaves out for some accounts (such as the family name or picture) default to an empty string.
+     * leaves out for some accounts (such as the family name or picture) default to an empty string, or for amr and
+     * auth_time, which Google only sends when they are asked for, an empty array and 0.
      *
      * @param \stdClass $jwt - the decoded claims, as returned by \Firebase\JWT\JWT::decode().
      *
@@ -95,8 +103,57 @@ final readonly class GoogleUserData
             pictureUrl: self::getOptionalString($jwt, "picture"),
             expiry: self::getRequiredInt($jwt, "exp"),
             issuedAt: self::getRequiredInt($jwt, "iat"),
+            authenticationMethods: self::getStrings($jwt, "amr"),
+            authTime: (isset($jwt->auth_time) && is_numeric($jwt->auth_time)) ? (int)$jwt->auth_time : 0,
             claims: $claims,
         );
+    }
+
+
+    /**
+     * Find out if the user signed in to Google with the given method, according to the "amr" claim. It describes their
+     * last sign-in to their Google account (see getAuthTime()), which may be long before this login to your site.
+     *
+     * Google only sends the amr claim when the client's mfaPolicy is MfaPolicyEnum::REPORT or REQUIRE, and only to
+     * apps that are published ("In production"), verified, and have both "Authentication strength claims" and
+     * "Session age claims" turned on (https://developers.google.com/identity/siwg/security-bundle). Until then, this
+     * is always false, even for users who have two-step verification turned on for their Google account.
+     *
+     * @param AuthenticationMethodEnum $method - the method to look for.
+     *
+     * @return bool - true if Google says it was used, or false if not, or if Google didn't send the amr claim.
+     */
+    public function hasAuthenticationMethod(AuthenticationMethodEnum $method) : bool
+    {
+        return in_array($method->value, $this->m_authenticationMethods, true);
+    }
+
+
+    /**
+     * Find out if the user signed in to Google with more than a password: a completed multi-factor challenge, or a
+     * hardware or software key, such as a passkey. See AuthenticationMethodEnum::isMultiFactor().
+     *
+     * Google only sends the amr claim when the client's mfaPolicy is MfaPolicyEnum::REPORT or REQUIRE, and only to
+     * apps that are published ("In production"), verified, and have both "Authentication strength claims" and
+     * "Session age claims" turned on (https://developers.google.com/identity/siwg/security-bundle). Until then, this
+     * is always false, even for users who have two-step verification turned on for their Google account.
+     *
+     * @return bool - true if so, or false if not, or if Google didn't send the amr claim, so a missing claim is never
+     * mistaken for multi-factor authentication.
+     */
+    public function hasMultiFactorAuthentication() : bool
+    {
+        $hasMultiFactor = false;
+
+        foreach (AuthenticationMethodEnum::cases() as $method)
+        {
+            if ($method->isMultiFactor() && $this->hasAuthenticationMethod($method))
+            {
+                $hasMultiFactor = true;
+            }
+        }
+
+        return $hasMultiFactor;
     }
 
 
@@ -117,6 +174,29 @@ final readonly class GoogleUserData
     private static function getOptionalString(\stdClass $jwt, string $claim) : string
     {
         return (isset($jwt->$claim) && is_string($jwt->$claim)) ? $jwt->$claim : "";
+    }
+
+
+    /**
+     * Get an optional claim that is a list of strings, leaving out anything in it that isn't a string.
+     * @return string[] - the strings, or an empty array if the claim is missing, or isn't a list.
+     */
+    private static function getStrings(\stdClass $jwt, string $claim) : array
+    {
+        $strings = [];
+
+        if (isset($jwt->$claim) && is_array($jwt->$claim))
+        {
+            foreach ($jwt->$claim as $value)
+            {
+                if (is_string($value))
+                {
+                    $strings[] = $value;
+                }
+            }
+        }
+
+        return $strings;
     }
 
 
@@ -149,5 +229,9 @@ final readonly class GoogleUserData
     public function getPictureUrl() : string { return $this->m_pictureUrl; }
     public function getExpiry() : int { return $this->m_expiry; }
     public function getIssuedAt() : int { return $this->m_issuedAt; }
+    # Empty ([] and 0) unless Google sent the amr and auth_time claims, which needs the client's mfaPolicy to be REPORT
+    # or REQUIRE, and the app to meet Google's requirements. See hasMultiFactorAuthentication().
+    public function getAuthenticationMethods() : array { return $this->m_authenticationMethods; }
+    public function getAuthTime() : int { return $this->m_authTime; }
     public function getClaims() : array { return $this->m_claims; }
 }

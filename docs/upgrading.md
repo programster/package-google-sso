@@ -1,6 +1,7 @@
 # Upgrading
 
 - [From 0.x to 1.0.0](#from-0x-to-100)
+- [From 0.3.0 to 0.4.0](#from-030-to-040)
 - [From 0.2.0 to 0.3.0](#from-020-to-030)
 - [From 0.1.0 to 0.2.0](#from-010-to-020)
 - [From 0.0.2 to 0.1.0](#from-002-to-010)
@@ -39,13 +40,30 @@ Then:
   parameters.
 - **The `sessionCsrfTokenKey` constructor option has been removed.** Pass
   `csrfTokenStore: new NativeSessionCsrfTokenStore("yourKey")` instead.
-- **The constructor's options are in a new order**: `csrfTokenStore` and `jwtLeewaySeconds` now come straight after
-  `cacheConfig`, before the two URLs. Code that uses named arguments, as the docs do, isn't affected. Code that passes
-  them by position fails with a `TypeError`, rather than putting a value in the wrong place.
+- **The constructor's options are in a new order**: `csrfTokenStore`, `mfaPolicy` and `jwtLeewaySeconds` now come
+  straight after `cacheConfig`, before the two URLs. Code that uses named arguments, as the docs do, isn't affected.
+  Code that passes them by position fails with a `TypeError`, rather than putting a value in the wrong place.
 - **The classes are `final`**: `GoogleSsoClient`, `GoogleUserData`, `CacheConfig`, and every exception except
   `ExceptionCsrfTokenMismatch` (which `ExceptionMissingCsrfToken` extends) and the abstract `ExceptionGoogleSso`.
   `GoogleSsoClient`, `GoogleUserData` and `CacheConfig` are also `readonly`. If you extended one, wrap it in a class of
   your own instead. To fake Google in tests, give the client a fake PSR-18 HTTP client, as the package's own tests do.
+
+## From 0.3.0 to 0.4.0
+Nothing has been removed or changed in a way that needs your code to change.
+
+- **Logins use PKCE.** The login URL has a code challenge, and the token request sends the matching code verifier, so
+  a code stolen from one login can't be used in another. See [How it works](how-it-works.md#pkce). Logins that are
+  under way when you upgrade (started before, finished after) may fail once, with an `invalid_grant` about the code
+  verifier, and only need to log in again.
+- **Token errors include Google's description**, as well as its error code, e.g.
+  `(HTTP 400, error: invalid_grant - Bad Request)`.
+- **`GoogleUserData` reads how the user signed in to Google**: `getAuthenticationMethods()` and `getAuthTime()`, for
+  Google's `amr` and `auth_time` claims, with `hasAuthenticationMethod()`, `hasMultiFactorAuthentication()` and
+  `AuthenticationMethodEnum`. See [How the user signed in to Google](user-data.md#how-the-user-signed-in-to-google).
+- **The new `mfaPolicy` constructor option** asks Google for those claims (`MfaPolicyEnum::REPORT`), and can refuse
+  users who didn't sign in with multi-factor authentication (`REQUIRE`), with an `ExceptionMfaRequired`. It defaults to
+  `IGNORE`, which doesn't ask, so nothing changes unless you set it. See
+  [Security](security.md#two-step-verification).
 
 ## From 0.2.0 to 0.3.0
 Nothing has been removed or changed in a way that needs your code to change.

@@ -11,6 +11,7 @@ Google SSO
     - [Get the user's details](#get-the-users-details)
     - [Match users to accounts safely](#match-users-to-accounts-safely)
     - [Only allow your Google Workspace domain](#only-allow-your-google-workspace-domain)
+    - [Require two-step verification](#require-two-step-verification)
     - [Handle a cancelled login](#handle-a-cancelled-login)
     - [Always ask which Google account to use](#always-ask-which-google-account-to-use)
     - [Use it with Slim or another PSR-7 framework](#use-it-with-slim-or-another-psr-7-framework)
@@ -42,6 +43,7 @@ a server, and the one where your client secret never leaves your server. Between
 checks:
 
 - that the user coming back is the one who left, with a single-use CSRF token (the OAuth `state`),
+- that the code Google gives back can only be used for this login, with PKCE,
 - that the ID token really came from Google, by checking its signature against Google's published certificates,
 - that it was issued to *your* app, rather than to some other app the user logged in to (the `aud` claim),
 - that it was issued by Google (the `iss` claim), and hasn't expired, allowing for a little clock difference.
@@ -215,6 +217,12 @@ To make it easier for them, you can also ask Google to offer your Workspace's ac
 [Login options](docs/login-options.md#suggesting-a-workspace-domain-hd)). If your Google Cloud project belongs to your
 Workspace, you can also make the app "Internal" in Google's settings, so that Google itself refuses anyone else. See
 [Setting up Google](docs/google-setup.md#internal-or-external).
+
+### Require two-step verification
+Pass `mfaPolicy: MfaPolicyEnum::REQUIRE` to the constructor, and users who didn't sign in to Google with two-step
+verification, a security key or a passkey are refused, with an `ExceptionMfaRequired`. Google only says how users signed
+in to apps it has verified, so try `MfaPolicyEnum::REPORT` first, which asks without refusing anyone, and check
+`$googleUser->getAuthenticationMethods()`. See [Security](docs/security.md#two-step-verification).
 
 ### Handle a cancelled login
 If the user cancels at Google, or declines to share their details, `handleGoogleSsoCallback()` throws

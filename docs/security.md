@@ -9,10 +9,10 @@
 - [Checklist](#checklist)
 
 ## What the package does for you
-Everything that is the same for every app is checked before you get the user's details: the CSRF token, the ID token's
-signature, expiry, issuer and audience, and Google's responses. See [How it works](how-it-works.md#what-is-checked)
-for the full list. If any check fails, `handleGoogleSsoCallback()` throws, so a login can't get through by your code
-forgetting to check something.
+Everything that is the same for every app is checked before you get the user's details: the CSRF token, PKCE, the
+ID token's signature, expiry, issuer and audience, and Google's responses. See
+[How it works](how-it-works.md#what-is-checked) for the full list. If any check fails, `handleGoogleSsoCallback()`
+throws, so a login can't get through by your code forgetting to check something.
 
 What's left is what depends on your app: who is allowed in, and which account they get.
 
@@ -74,14 +74,43 @@ If your Google Cloud project belongs to your organisation, you can also make the
 Keeping the check in your code as well means it still holds if that setting is ever changed.
 
 ## Two-step verification
-Google's ID tokens don't say how the user logged in, so the package can't tell you whether they used two-step
-verification. If you need everyone to use it:
+Google can say how the user signed in to their Google account, in the `amr` claim (see
+[How the user signed in to Google](user-data.md#how-the-user-signed-in-to-google)), and the package can refuse users
+who didn't use two-step verification, a security key or a passkey:
+
+```php
+use Programster\GoogleSso\MfaPolicyEnum;
+
+$googleSso = new GoogleSsoClient(
+    clientId: getenv("GOOGLE_CLIENT_ID"),
+    clientSecret: getenv("GOOGLE_CLIENT_SECRET"),
+    googleCallbackUrl: "https://example.com/login/callback",
+    requestFactory: new \GuzzleHttp\Psr7\HttpFactory(),
+    responseFactory: new \GuzzleHttp\Psr7\HttpFactory(),
+    httpClient: new \GuzzleHttp\Client(['timeout' => 10]),
+    mfaPolicy: MfaPolicyEnum::REQUIRE,
+);
+```
+
+| `MfaPolicyEnum` | Asks Google how the user signed in | Refuses users without MFA |
+|---|---|---|
+| `IGNORE` | No. This is the default. | No |
+| `REPORT` | Yes, so `getAuthenticationMethods()` and `getAuthTime()` are filled in | No |
+| `REQUIRE` | Yes | Yes, with an `ExceptionMfaRequired` |
+
+Google only says how the user signed in to apps that are published, verified, and have "Authentication strength
+claims" turned on (see Google's [security bundle](https://developers.google.com/identity/siwg/security-bundle)).
+`REQUIRE` refuses anyone Google doesn't say used MFA, including when it doesn't say anything at all, as the login URL
+can be edited to stop it asking. So before you use `REQUIRE`, use `REPORT` for a while, and check that Google is sending
+`getAuthenticationMethods()`. Otherwise, it refuses everyone.
+
+It checks the user's last sign-in to their Google account, which may have been long before this login to your site.
+Google can't be asked to make them sign in again.
+
+For accounts your organisation manages, you can also make Google itself enforce it:
 
 1. Require two-step verification for your organisation, in the Google Workspace admin console.
 2. Only let in users from your Workspace, as above.
-
-Then Google won't let anyone log in to those accounts without it. This only works for accounts your Workspace manages:
-there's no way to require it for personal Google accounts.
 
 ## After the login
 The package checks the login, but logging the user in to your site is up to you:

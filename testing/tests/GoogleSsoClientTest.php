@@ -85,9 +85,11 @@ $testTokenRequest = function () : void {
         'client_id' => TestFixtures::CLIENT_ID,
         'client_secret' => TestFixtures::CLIENT_SECRET,
         'redirect_uri' => TestFixtures::CALLBACK_URL,
+        'code_verifier' => $body['code_verifier'] ?? "",
     ];
 
     assert($body === $expectedBody, "unexpected token request body: " . $request->getBody());
+    assert(preg_match('/^[A-Za-z0-9_-]{43}$/', $expectedBody['code_verifier']) === 1, "the code verifier is invalid");
 };
 
 $smoke->run("handleGoogleSsoCallback sends a form-encoded token request", $testTokenRequest);
@@ -202,7 +204,7 @@ $testTokenEndpointErrors = function () : void {
     $json = ['Content-Type' => 'application/json'];
 
     $failures = [
-        'HTTP 400, error: invalid_grant' => new Response(400, $json, $invalidGrantBody),
+        'HTTP 400, error: invalid_grant - Bad Request' => new Response(400, $json, $invalidGrantBody),
         'HTTP 500, error: no error given' => new Response(500, $json, $errorWithIdToken),
         "wasn't valid JSON" => new Response(502, ['Content-Type' => 'text/html'], '<html>Bad Gateway</html>'),
         'HTTP 200, error: no error given' => new Response(200, $json, '{"access_token":"x"}'),
@@ -472,3 +474,15 @@ $testUnverifiedEmailAllowed = function () : void {
 };
 
 $smoke->run("handleGoogleSsoCallback lets an unverified email address through with ALLOW", $testUnverifiedEmailAllowed);
+
+$testSessionClaimsThroughCallback = function () : void {
+    $authTime = time() - 60;
+    $claims = TestFixtures::validClaims(['amr' => ["swk"], 'auth_time' => $authTime]);
+    $client = TestFixtures::createClient(FakeGoogleHttpClient::issuingIdToken($claims));
+    $state = TestFixtures::startLogin($client);
+    $googleUser = $client->handleGoogleSsoCallback(TestFixtures::callbackParameters($state));
+    assert($googleUser->getAuthenticationMethods() === ["swk"] && $googleUser->getAuthTime() === $authTime);
+    assert($googleUser->hasMultiFactorAuthentication());
+};
+
+$smoke->run("handleGoogleSsoCallback passes on the amr and auth_time claims", $testSessionClaimsThroughCallback);

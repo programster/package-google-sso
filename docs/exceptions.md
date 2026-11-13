@@ -47,6 +47,7 @@ so catching that one catches them too.
 | `ExceptionUnexpectedResponse` | Google's token or certificates endpoint returned an error, or something that isn't the JSON expected. The message includes the HTTP status and Google's error, e.g. `invalid_grant`. | `getResponse()` |
 | `ExceptionInvalidIdToken` | The ID token wasn't issued by Google, was issued to a different client, or is missing a claim Google always includes. | |
 | `ExceptionUnverifiedEmail` | Google hasn't verified that the user owns their email address. Not thrown if you pass `UnverifiedEmailPolicyEnum::ALLOW` to the callback. | `getEmail()` |
+| `ExceptionMfaRequired` | With `MfaPolicyEnum::REQUIRE`, Google doesn't say the user signed in with multi-factor authentication, or doesn't say how they signed in at all. | `getAuthenticationMethods()` |
 
 The constructor also throws `\InvalidArgumentException` if `jwtLeewaySeconds` is negative.
 
@@ -72,6 +73,7 @@ Some exceptions come from the libraries the package uses, and are passed on as t
 | They refreshed the callback page, or came back to it | `ExceptionMissingCsrfToken`, `ExceptionUnexpectedResponse` (`invalid_grant`) | "Your login has expired. Please try again." If they're already logged in, just send them on. |
 | Their session expired while they were at Google | `ExceptionMissingCsrfToken` | "Your login has expired. Please try again." |
 | Google hasn't verified their email address | `ExceptionUnverifiedEmail` | "Please verify your email address with Google, and then try again." |
+| They didn't use two-step verification | `ExceptionMfaRequired` | "Please turn on 2-Step Verification for your Google account, sign out of Google, and sign in again." |
 | Google is unreachable or returned an error | `ClientExceptionInterface`, `ExceptionUnexpectedResponse` | "We couldn't reach Google. Please try again in a few minutes." |
 | Anything else | The rest | "Sorry, we couldn't log you in with Google." Log it, as it may be a misconfiguration or someone tampering. |
 
