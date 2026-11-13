@@ -158,7 +158,7 @@ class GoogleSsoClient
      * Create and return the URL that a user can go to in order to start the "Login with Google" flow. The CSRF token is
      * kept in the CSRF token store, so with the default store, the session must have been started first. Calling this
      * more than once for the same user (e.g. for several links on a page) reuses the same token, until a callback uses
-     * it up.
+     * it up. The URL also has a PKCE code challenge, so that only this site can exchange the code Google gives back.
      *
      * @return string - a Google URL the user needs to go to, in order to login with Google.
      *
@@ -180,12 +180,16 @@ class GoogleSsoClient
 
         // info about scopes
         // https://developers.google.com/identity/protocols/oauth2/scopes
+        $codeVerifier = $this->createPkceCodeVerifier($stateToken);
+
         $queryParameters = [
             'scope' => implode(" ", ["email", "openid", "profile"]),
             'response_type' => 'code',
             'state' => $stateToken,
             'redirect_uri' => $this->m_googleCallbackUrl,
             'client_id' => $this->m_clientId,
+            'code_challenge' => self::base64UrlEncode(hash("sha256", $codeVerifier, true)),
+            'code_challenge_method' => 'S256',
         ];
 
         return "https://accounts.google.com/o/oauth2/auth?" . http_build_query($queryParameters);
@@ -198,7 +202,8 @@ class GoogleSsoClient
      * $request->getQueryParams() in a PSR-7 framework.
      *
      * This checks the state against the stored CSRF token (which is then used up, whether it matched or not),
-     * trades the code for an ID token, and checks the ID token's signature, expiry, issuer and audience.
+     * trades the code for an ID token (with the PKCE code verifier), and checks the ID token's signature, expiry,
+     * issuer and audience.
      *
      * This does NOT check that the user's email address has been verified. If you match users to accounts by email,
      * check getEmailVerified() on the result first.
@@ -242,7 +247,7 @@ class GoogleSsoClient
         }
 
         $code = self::getRequiredQueryParameter($queryParameters, "code");
-        $idToken = $this->exchangeCodeForIdToken($code);
+        $idToken = $this->exchangeCodeForIdToken($code, $this->createPkceCodeVerifier($state));
         return $this->decodeIdToken($idToken);
     }
 
@@ -292,10 +297,13 @@ class GoogleSsoClient
 
     /**
      * Trade the code Google gave the user for the ID token.
+     * @param string $code - the code from the callback.
+     * @param string $codeVerifier - the PKCE code verifier for the login, from createPkceCodeVerifier().
+     * @return string - the encoded ID token.
      * @throws ExceptionUnexpectedResponse
      * @throws \Psr\Http\Client\ClientExceptionInterface
      */
-    private function exchangeCodeForIdToken(string $code) : string
+    private function exchangeCodeForIdToken(string $code, string $codeVerifier) : string
     {
         $parameters = [
             'grant_type' => "authorization_code",
@@ -303,6 +311,7 @@ class GoogleSsoClient
             'client_id' => $this->m_clientId,
             'client_secret' => $this->m_clientSecret,
             'redirect_uri' => $this->m_googleCallbackUrl,
+            'code_verifier' => $codeVerifier,
         ];
 
         $request = $this->m_requestFactory->createRequest("POST", $this->m_googleOauthUrl . "/token");
@@ -323,7 +332,10 @@ class GoogleSsoClient
         {
             $error = is_string($responseArray['error'] ?? null) ? $responseArray['error'] : "no error given";
             $statusCode = $response->getStatusCode();
-            $message = "Google's token endpoint didn't return an ID token (HTTP {$statusCode}, error: {$error}).";
+            $hasDescription = is_string($responseArray['error_description'] ?? null);
+            $description = $hasDescription ? " - {$responseArray['error_description']}" : "";
+            $details = "HTTP {$statusCode}, error: {$error}{$description}";
+            $message = "Google's token endpoint didn't return an ID token ({$details}).";
             throw new ExceptionUnexpectedResponse($response, $message);
         }
 
@@ -367,6 +379,27 @@ class GoogleSsoClient
         }
 
         return GoogleUserData::createFromJwt($claims);
+    }
+
+
+    /**
+     * Work out the PKCE code verifier for a login, from its state (the CSRF token). PKCE binds the code Google gives
+     * back to this login: the login URL sends Google a hash of the verifier, and only the verifier itself can then
+     * exchange the code, so a code stolen from one login can't be used in another (e.g. by an attacker pasting it into
+     * a callback in their own session, as the state check alone can't catch that).
+     *
+     * It is an HMAC of the state, keyed with the client secret, rather than another random value, so that nothing more
+     * has to be kept in the CSRF token store, and the same state always gives the same verifier, even in another
+     * process. Without the client secret, it can't be worked out from the state, which is in the login URL.
+     *
+     * @param string $state - the login's state.
+     *
+     * @return string - the code verifier: 43 characters of base64url, as PKCE needs between 43 and 128.
+     */
+    private function createPkceCodeVerifier(string $state) : string
+    {
+        $hmac = hash_hmac("sha256", "programster/google-sso PKCE code verifier: {$state}", $this->m_clientSecret, true);
+        return self::base64UrlEncode($hmac);
     }
 
 
@@ -549,6 +582,17 @@ class GoogleSsoClient
         }
 
         return in_array($keyId, $keyIds, true);
+    }
+
+
+    /**
+     * Encode binary data as base64url (RFC 4648), without padding, as PKCE uses.
+     * @param string $data - the binary data.
+     * @return string
+     */
+    private static function base64UrlEncode(string $data) : string
+    {
+        return rtrim(strtr(base64_encode($data), "+/", "-_"), "=");
     }
 
 

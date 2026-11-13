@@ -9,10 +9,10 @@
 - [Checklist](#checklist)
 
 ## What the package does for you
-Everything that is the same for every app is checked before you get the user's details: the CSRF token, the ID token's
-signature, expiry, issuer and audience, and Google's responses. See [How it works](how-it-works.md#what-is-checked)
-for the full list. If any check fails, `handleGoogleSsoCallback()` throws, so a login can't get through by your code
-forgetting to check something.
+Everything that is the same for every app is checked before you get the user's details: the CSRF token, PKCE, the
+ID token's signature, expiry, issuer and audience, and Google's responses. See
+[How it works](how-it-works.md#what-is-checked) for the full list. If any check fails, `handleGoogleSsoCallback()`
+throws, so a login can't get through by your code forgetting to check something.
 
 What's left is what depends on your app: who is allowed in, and which account they get.
 

@@ -40,6 +40,7 @@ a server, and the one where your client secret never leaves your server. Between
 checks:
 
 - that the user coming back is the one who left, with a single-use CSRF token (the OAuth `state`),
+- that the code Google gives back can only be used for this login, with PKCE,
 - that the ID token really came from Google, by checking its signature against Google's published certificates,
 - that it was issued to *your* app, rather than to some other app the user logged in to (the `aud` claim),
 - that it was issued by Google (the `iss` claim), and hasn't expired, allowing for a little clock difference.

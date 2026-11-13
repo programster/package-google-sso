@@ -4,6 +4,7 @@
 - [What is checked](#what-is-checked)
 - [What is sent to Google](#what-is-sent-to-google)
 - [The CSRF token (state)](#the-csrf-token-state)
+- [PKCE](#pkce)
 
 ## The login, step by step
 The package uses OpenID Connect's "authorization code" flow, which is what Google recommends for a site with a server:
@@ -40,14 +41,14 @@ The package uses OpenID Connect's "authorization code" flow, which is what Googl
 1. The user clicks your "Login with Google" link or button.
 2. `createGoogleSsoLoginUrl()` (or `sendUserToGoogleLogin()`, which redirects to it) makes a random CSRF token, keeps
    it in the user's session (through the CSRF token store), and builds Google's login URL, with the token as the
-   `state`.
+   `state`, and a PKCE code challenge (see [PKCE](#pkce)).
 3. At Google, the user logs in if they aren't already, and agrees to share their name, email address and picture.
    If they have done that before, Google may skip straight to the next step.
 4. Google sends the user back to your callback URL, with a one-off `code` and the same `state`. If they cancelled, it
    sends an `error` (e.g. `access_denied`) instead of a code.
 5. `handleGoogleSsoCallback()` takes the token out of the session, and checks the `state` matches it.
-6. It sends the code, along with your client ID and secret, to Google's token endpoint, which returns an ID token.
-   This is a JWT (a signed JSON object) of "claims" about the user.
+6. It sends the code, along with your client ID and secret and the PKCE code verifier, to Google's token endpoint,
+   which returns an ID token. This is a JWT (a signed JSON object) of "claims" about the user.
 7. It gets Google's public certificates, from the cache if you have configured one, and it has the key the ID token
    was signed with. Otherwise, it fetches them from Google, which picks up a key Google has started using since they
    were cached.
@@ -64,7 +65,7 @@ Before you get a `GoogleUserData`, the package checks:
 | The callback isn't an error | The user may have cancelled | `ExceptionGoogleLoginError` |
 | The callback has a `state` and `code` | Someone may have gone to the callback URL directly | `ExceptionMissingCallbackParameter` |
 | The session has a CSRF token, and the `state` matches it | Stops someone logging the user in as someone else (login CSRF), and stops a callback being used twice | `ExceptionMissingCsrfToken`, `ExceptionCsrfTokenMismatch` |
-| Google's token endpoint returned an ID token | The code may have expired, or already been used | `ExceptionUnexpectedResponse` |
+| Google's token endpoint returned an ID token, which it only does for a code verifier that matches the login's code challenge | The code may have expired, or already been used, or been stolen from another login (PKCE) | `ExceptionUnexpectedResponse` |
 | The ID token is signed by one of Google's keys | Stops a made-up token being accepted | `\Firebase\JWT\SignatureInvalidException` |
 | It hasn't expired, and wasn't issued in the future (allowing 60 seconds' difference between clocks by default) | Stops an old token being reused | `\Firebase\JWT\ExpiredException`, `\Firebase\JWT\BeforeValidException` |
 | Its `iss` is `accounts.google.com` or `https://accounts.google.com` | Stops a token from another issuer being accepted | `ExceptionInvalidIdToken` |
@@ -75,11 +76,11 @@ What isn't checked is up to you, as it depends on your app: whether the email ad
 domain the user is from. See [Security](security.md).
 
 ## What is sent to Google
-- **The login URL** has your client ID, your callback URL, the `state`, and the scopes `openid email profile`. It
-  doesn't ask for offline access, so Google doesn't give a refresh token, and the consent screen is the smallest it can
-  be.
+- **The login URL** has your client ID, your callback URL, the `state`, the scopes `openid email profile`, and the
+  PKCE `code_challenge` (with `code_challenge_method=S256`). It doesn't ask for offline access, so Google doesn't give a
+  refresh token, and the consent screen is the smallest it can be.
 - **The token request** is a `POST` to `https://oauth2.googleapis.com/token`, as `application/x-www-form-urlencoded`,
-  with the code, your client ID and secret, and your callback URL.
+  with the code, your client ID and secret, your callback URL, and the PKCE `code_verifier`.
 - **The certificates request** is a `GET` to `https://www.googleapis.com/oauth2/v3/certs`.
 
 Both requests are sent with the PSR-18 client you give `GoogleSsoClient`, so they use its timeouts, proxy settings and
@@ -96,3 +97,28 @@ any logging it has.
   `ExceptionMissingCsrfToken`, rather than trying to use the code again.
 - It is compared with `hash_equals()`, which takes the same time however much of it matches, so it can't be guessed a
   character at a time.
+
+## PKCE
+PKCE ("Proof Key for Code Exchange", [RFC 7636](https://www.rfc-editor.org/rfc/rfc7636)) binds the code Google gives
+back to the login it was given for, so that a code stolen from one login can't be used in another:
+
+- The login URL sends Google a `code_challenge`, which is the SHA-256 hash of a secret `code_verifier`.
+- When the code is exchanged for the ID token, the `code_verifier` itself is sent, and Google only accepts it if its
+  hash matches the challenge the login started with.
+
+The state check stops an attacker logging a user in to the attacker's account (login CSRF), but on its own it can't
+stop the opposite: an attacker who gets hold of a user's code (e.g. from a log, or a browser history) pasting it into
+a callback in the attacker's *own* session, which has a valid state of its own, and getting logged in as the user.
+With PKCE, the attacker's session sends the verifier for the attacker's login, which doesn't match the challenge the
+user's code was issued for, so Google refuses it. The OAuth security best practices
+([RFC 9700](https://www.rfc-editor.org/rfc/rfc9700)) recommend PKCE for every client, including those with a client
+secret, like this one.
+
+The code verifier is an HMAC of the state, keyed with your client secret, rather than another random value. So
+nothing more needs to be kept in the session, the same login always gets the same verifier (even if the callback is
+handled by another process or server), and it can't be worked out from the state in the login URL without your client
+secret. It is 43 characters of base64url, as PKCE requires 43 to 128. Only the `S256` method is used, never `plain`.
+
+Google's [discovery document](https://accounts.google.com/.well-known/openid-configuration) lists `S256` as supported,
+and its own client libraries use PKCE with web server clients like this one, although Google's guide for web server
+apps doesn't mention it.

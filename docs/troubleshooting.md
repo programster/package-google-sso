@@ -68,6 +68,16 @@ Google refused the code. Codes can only be used once, and expire after a few min
 If the error is `redirect_uri_mismatch` instead, the callback was handled by a `GoogleSsoClient` with a different
 `googleCallbackUrl` from the one that created the login URL. Use the same callback URL for both.
 
+The message includes Google's description of the error. If it mentions the code verifier (e.g. "Missing code
+verifier."), the PKCE check failed. That can happen:
+
+- for logins that were already under way when you upgraded to a version of this package with PKCE, as their login URL
+  had no code challenge. They only need to log in again.
+- if the client secret was changed in between the login starting and the callback, as the code verifier is worked out
+  with it. Again, logging in again fixes it.
+- if the login URL and the callback are handled by clients with different client secrets, e.g. a development and a
+  production client sharing a session. Use the same client for both.
+
 ## ExceptionUnexpectedResponse with invalid_client or unauthorized_client
 Google doesn't accept your client ID or secret. Check that they are both from the same client, that the secret hasn't
 been deleted or replaced, and that there's no whitespace or newline around them (e.g. from reading them from a file).
