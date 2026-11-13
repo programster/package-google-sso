@@ -8,7 +8,7 @@ namespace Programster\GoogleSso\Exceptions;
  * Thrown when Google sends the user back with an "error" query parameter instead of a code. Most often this is
  * "access_denied", because the user cancelled the login, or declined to share their details.
  */
-class ExceptionGoogleLoginError extends ExceptionGoogleSso
+final class ExceptionGoogleLoginError extends ExceptionGoogleSso
 {
     private readonly string $m_error;
 

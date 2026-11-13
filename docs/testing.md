@@ -13,11 +13,12 @@ To run the tests on your current version of PHP, run `composer install`, and the
 php -d zend.assertions=1 testing/main.php
 ```
 
-The tests are in `testing/tests/`, with one file per class (e.g. `GoogleSsoClientTest.php`). Between them, they log in
-against a fake Google, and check what every public method returns, and what it throws when something goes wrong (a
-cancelled login, a replayed callback, a token issued to another app, Google returning an error, and so on). A test
-fails if it throws, fails an `assert()`, or raises a PHP warning or deprecation. `main.php` runs every `*Test.php` file
-in that folder, so a new file is picked up automatically. It exits with a non-zero code if anything fails.
+The tests are in `testing/tests/`, with one file per class or feature (e.g. `GoogleSsoClientTest.php`, `PkceTest.php`).
+Between them, they log in against a fake Google, and check what every public method returns, and what it throws when
+something goes wrong (a cancelled login, a replayed callback, a token issued to another app, Google returning an error,
+and so on). A test fails if it throws, fails an `assert()`, or raises a PHP warning or deprecation. `main.php` runs
+every `*Test.php` file in that folder, so a new file is picked up automatically. It exits with a non-zero code if
+anything fails.
 
 The checks use `assert()`, so `zend.assertions` must be `1`. `main.php` refuses to run otherwise, rather than passing
 without checking anything.

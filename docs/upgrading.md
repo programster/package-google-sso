@@ -1,5 +1,6 @@
 # Upgrading
 
+- [From 0.x to 1.0.0](#from-0x-to-100)
 - [From 0.4.0 to 0.4.1](#from-040-to-041)
 - [From 0.3.0 to 0.4.0](#from-030-to-040)
 - [From 0.2.0 to 0.3.0](#from-020-to-030)
@@ -8,6 +9,51 @@
     - [Changes you should make](#changes-you-should-make)
     - [Changes in behaviour](#changes-in-behaviour)
     - [New features](#new-features)
+
+## From 0.x to 1.0.0
+1.0.0 removes what 0.x deprecated, so first upgrade to the latest 0.x, and fix any deprecation warnings your IDE shows.
+Then:
+
+- **Users whose email address Google hasn't verified are refused.** `handleGoogleSsoCallback()` throws an
+  `ExceptionUnverifiedEmail` for them, so catch it, and ask them to verify their address with Google. If you only ever
+  find users by `getSub()`, you can let them in as before, with
+  `handleGoogleSsoCallback($_GET, UnverifiedEmailPolicyEnum::ALLOW)`. See
+  [Security](security.md#matching-users-to-accounts).
+- **Pass a `responseFactory` to the constructor.** It's a PSR-17 `ResponseFactoryInterface`, and is now required.
+  Guzzle's `HttpFactory` (and Nyholm's `Psr17Factory`) is both factories, so pass the same class as your
+  `requestFactory`:
+
+  ```php
+  $googleSso = new GoogleSsoClient(
+      clientId: getenv("GOOGLE_CLIENT_ID"),
+      clientSecret: getenv("GOOGLE_CLIENT_SECRET"),
+      googleCallbackUrl: "https://example.com/login/callback",
+      requestFactory: new \GuzzleHttp\Psr7\HttpFactory(),
+      responseFactory: new \GuzzleHttp\Psr7\HttpFactory(),
+      httpClient: new \GuzzleHttp\Client(['timeout' => 10]),
+  );
+  ```
+
+- **`sendUserToGoogleLogin()` has been removed**, as it called `header()` and `die()`. In plain PHP, use
+  `header("Location: " . $googleSso->createGoogleSsoLoginUrl());`. In a PSR-7 framework, return the new
+  `createGoogleSsoLoginResponse()`, which takes the same options. See [Frameworks and sessions](frameworks.md).
+- **`handleGoogleSsoLogin()` has been removed.** Use `handleGoogleSsoCallback($_GET)`, or pass your framework's query
+  parameters.
+- **The `sessionCsrfTokenKey` constructor option has been removed.** Pass
+  `csrfTokenStore: new NativeSessionCsrfTokenStore("yourKey")` instead.
+- **The constructor's options are in a new order**: `csrfTokenStore`, `mfaPolicy` and `jwtLeewaySeconds` now come
+  straight after `cacheConfig`, before the two URLs. Code that uses named arguments, as the docs do, isn't affected.
+  Code that passes them by position fails with a `TypeError`, rather than putting a value in the wrong place.
+- **The default CSRF token store needs a started session.** If `session_start()` hasn't been called, creating the
+  login URL or handling the callback throws a `\LogicException`, rather than the login failing later with an
+  `ExceptionMissingCsrfToken`. A site that logs in successfully today already starts its session, so isn't affected.
+- **`CacheConfig` checks its options when it's created.** A `jwtCachePeriod` below 1 second (which never cached
+  anything), or a `cacheKey` that is empty or has a character PSR-6 reserves (`{}()/\@:`), throws an
+  `\InvalidArgumentException`.
+- **The classes are `final`**: `GoogleSsoClient`, `GoogleUserData`, `CacheConfig`, and every exception except
+  `ExceptionCsrfTokenMismatch` (which `ExceptionMissingCsrfToken` extends) and the abstract `ExceptionGoogleSso`.
+  `GoogleSsoClient`, `GoogleUserData` and `CacheConfig` are also `readonly`. If you extended one, wrap it in a class of
+  your own instead. To fake Google in tests, give the client a fake PSR-18 HTTP client, as the package's own tests do.
 
 ## From 0.4.0 to 0.4.1
 Nothing has been removed or changed in a way that needs your code to change.

@@ -39,9 +39,9 @@ The package uses OpenID Connect's "authorization code" flow, which is what Googl
 ```
 
 1. The user clicks your "Login with Google" link or button.
-2. `createGoogleSsoLoginUrl()` (or `sendUserToGoogleLogin()`, which redirects to it) makes a random CSRF token, keeps
-   it in the user's session (through the CSRF token store), and builds Google's login URL, with the token as the
-   `state`, and a PKCE code challenge (see [PKCE](#pkce)).
+2. `createGoogleSsoLoginUrl()` (or `createGoogleSsoLoginResponse()`, which redirects to it) makes a random CSRF
+   token, keeps it in the user's session (through the CSRF token store), and builds Google's login URL, with the
+   token as the `state`, and a PKCE code challenge (see [PKCE](#pkce)).
 3. At Google, the user logs in if they aren't already, and agrees to share their name, email address and picture.
    If they have done that before, Google may skip straight to the next step.
 4. Google sends the user back to your callback URL, with a one-off `code` and the same `state`. If they cancelled, it
@@ -71,10 +71,11 @@ Before you get a `GoogleUserData`, the package checks:
 | Its `iss` is `accounts.google.com` or `https://accounts.google.com` | Stops a token from another issuer being accepted | `ExceptionInvalidIdToken` |
 | Its `aud` is your client ID | Stops a token that Google issued to another app being accepted | `ExceptionInvalidIdToken` |
 | It has the claims Google always includes (`sub`, `email`, etc.) | Stops you getting a half-filled object | `ExceptionInvalidIdToken` |
+| Google has verified the user's email address (`email_verified`), unless you pass `UnverifiedEmailPolicyEnum::ALLOW` | Stops someone using an email address they don't own to get into its owner's account | `ExceptionUnverifiedEmail` |
 | With `MfaPolicyEnum::REQUIRE`, the user signed in to Google with multi-factor authentication | Lets you refuse accounts protected only by a password | `ExceptionMfaRequired` |
 
-What isn't checked is up to you, as it depends on your app: whether the email address has been verified, and which
-domain the user is from. See [Security](security.md).
+What isn't checked is up to you, as it depends on your app: which domain the user is from. See
+[Security](security.md).
 
 ## What is sent to Google
 - **The login URL** has your client ID, your callback URL, the `state`, the scopes `openid email profile`, and the

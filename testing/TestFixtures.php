@@ -60,6 +60,7 @@ final class TestFixtures
             clientSecret: self::CLIENT_SECRET,
             googleCallbackUrl: self::CALLBACK_URL,
             requestFactory: new HttpFactory(),
+            responseFactory: new HttpFactory(),
             httpClient: $httpClient,
             jwtLeewaySeconds: $jwtLeewaySeconds,
         );
@@ -82,6 +83,7 @@ final class TestFixtures
             clientSecret: self::CLIENT_SECRET,
             googleCallbackUrl: self::CALLBACK_URL,
             requestFactory: new HttpFactory(),
+            responseFactory: new HttpFactory(),
             httpClient: $httpClient,
             mfaPolicy: $mfaPolicy,
         );
@@ -104,6 +106,7 @@ final class TestFixtures
             clientSecret: self::CLIENT_SECRET,
             googleCallbackUrl: self::CALLBACK_URL,
             requestFactory: new HttpFactory(),
+            responseFactory: new HttpFactory(),
             httpClient: $httpClient,
             cacheConfig: new CacheConfig($cachePool),
         );
@@ -111,23 +114,19 @@ final class TestFixtures
 
 
     /**
-     * Create a client that talks to a fake Google, with these CSRF token options.
-     * @param string $sessionCsrfTokenKey - the deprecated constructor option.
+     * Create a client that talks to a fake Google, and keeps the CSRF token in the given store.
      * @param CsrfTokenStoreInterface $csrfTokenStore - the store to use.
      * @return GoogleSsoClient
      */
-    public static function createClientWithCsrfOptions(
-        string $sessionCsrfTokenKey,
-        CsrfTokenStoreInterface $csrfTokenStore
-    ) : GoogleSsoClient
+    public static function createClientWithCsrfStore(CsrfTokenStoreInterface $csrfTokenStore) : GoogleSsoClient
     {
         return new GoogleSsoClient(
             clientId: self::CLIENT_ID,
             clientSecret: self::CLIENT_SECRET,
             googleCallbackUrl: self::CALLBACK_URL,
             requestFactory: new HttpFactory(),
+            responseFactory: new HttpFactory(),
             httpClient: FakeGoogleHttpClient::issuingIdToken(self::validClaims()),
-            sessionCsrfTokenKey: $sessionCsrfTokenKey,
             csrfTokenStore: $csrfTokenStore,
         );
     }

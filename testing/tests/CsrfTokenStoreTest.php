@@ -9,6 +9,7 @@ declare(strict_types = 1);
 
 use Programster\GoogleSso\Exceptions\ExceptionMissingCsrfToken;
 use Programster\GoogleSso\NativeSessionCsrfTokenStore;
+use Programster\GoogleSso\Testing\FakeGoogleHttpClient;
 use Programster\GoogleSso\Testing\InMemoryCsrfTokenStore;
 use Programster\GoogleSso\Testing\SmokeTest;
 use Programster\GoogleSso\Testing\TestFixtures;
@@ -27,10 +28,6 @@ $testNativeStore = function () : void {
     $_SESSION["googleSsoCsrfToken"] = ["not", "a", "token"];
     assert($store->getToken() === "");
 
-    # Without a session at all, it has no token, rather than raising a warning.
-    unset($_SESSION);
-    assert($store->getToken() === "");
-    $store->removeToken();
 };
 
 $smoke->run("NativeSessionCsrfTokenStore keeps the token in \$_SESSION", $testNativeStore);
@@ -49,9 +46,38 @@ $testNativeStoreKey = function () : void {
 
 $smoke->run("NativeSessionCsrfTokenStore uses the given key, which can't be empty", $testNativeStoreKey);
 
+$testNoSession = function () : void {
+    # The test runner starts a session, so put it aside for this test, and start it again afterwards.
+    session_abort();
+
+    try
+    {
+        $store = new NativeSessionCsrfTokenStore();
+        $client = TestFixtures::createClient(FakeGoogleHttpClient::issuingIdToken(TestFixtures::validClaims()));
+
+        $useStore = [
+            "getToken" => function () use ($store) : void { $store->getToken(); },
+            "setToken" => function () use ($store) : void { $store->setToken("abc"); },
+            "removeToken" => function () use ($store) : void { $store->removeToken(); },
+            "createGoogleSsoLoginUrl" => function () use ($client) : void { $client->createGoogleSsoLoginUrl(); },
+        ];
+
+        foreach ($useStore as $use)
+        {
+            SmokeTest::expectException(\LogicException::class, $use, "session_start()");
+        }
+    }
+    finally
+    {
+        session_start(['use_cookies' => 0, 'use_only_cookies' => 1, 'cache_limiter' => '']);
+    }
+};
+
+$smoke->run("NativeSessionCsrfTokenStore refuses to work without a started session", $testNoSession);
+
 $testCustomStore = function () : void {
     $store = new InMemoryCsrfTokenStore();
-    $client = TestFixtures::createClientWithCsrfOptions(NativeSessionCsrfTokenStore::DEFAULT_KEY, $store);
+    $client = TestFixtures::createClientWithCsrfStore($store);
     $loginUrl = $client->createGoogleSsoLoginUrl();
     $state = $store->getToken();
     assert($state !== "" && str_contains($loginUrl, "state={$state}"), "the state should come from the store");
@@ -70,31 +96,11 @@ $testCustomStore = function () : void {
 
 $smoke->run("GoogleSsoClient uses the csrfTokenStore it is given, rather than \$_SESSION", $testCustomStore);
 
-$testDeprecatedSessionKey = function () : void {
-    # The deprecated constructor option still works on its own, as it did before stores existed.
-    $client = TestFixtures::createClientWithCsrfOptions("legacyKey", new NativeSessionCsrfTokenStore());
-    $state = TestFixtures::startLoginWithSessionKey($client, "legacyKey");
+$testNativeStoreWithKey = function () : void {
+    $client = TestFixtures::createClientWithCsrfStore(new NativeSessionCsrfTokenStore("myToken"));
+    $state = TestFixtures::startLoginWithSessionKey($client, "myToken");
+    assert(!isset($_SESSION[TestFixtures::SESSION_KEY]), "the default key shouldn't be used");
     assert($client->handleGoogleSsoCallback(TestFixtures::callbackParameters($state))->getSub() !== "");
-
-    # As does a native store given the same key, which is pointless, but harmless.
-    $client = TestFixtures::createClientWithCsrfOptions("legacyKey", new NativeSessionCsrfTokenStore("legacyKey"));
-    assert(TestFixtures::startLoginWithSessionKey($client, "legacyKey") !== "");
 };
 
-$smoke->run("the deprecated sessionCsrfTokenKey still works", $testDeprecatedSessionKey);
-
-$testConflictingOptions = function () : void {
-    $createWithCustomStore = function () : void {
-        TestFixtures::createClientWithCsrfOptions("legacyKey", new InMemoryCsrfTokenStore());
-    };
-
-    SmokeTest::expectException(\InvalidArgumentException::class, $createWithCustomStore, "sessionCsrfTokenKey");
-
-    $createWithOtherKey = function () : void {
-        TestFixtures::createClientWithCsrfOptions("legacyKey", new NativeSessionCsrfTokenStore("otherKey"));
-    };
-
-    SmokeTest::expectException(\InvalidArgumentException::class, $createWithOtherKey, "sessionCsrfTokenKey");
-};
-
-$smoke->run("sessionCsrfTokenKey can't be silently ignored by a csrfTokenStore", $testConflictingOptions);
+$smoke->run("GoogleSsoClient keeps the token under a NativeSessionCsrfTokenStore's own key", $testNativeStoreWithKey);

@@ -16,6 +16,7 @@ use Programster\GoogleSso\Exceptions\ExceptionMfaRequired;
 use Programster\GoogleSso\Exceptions\ExceptionMissingCallbackParameter;
 use Programster\GoogleSso\Exceptions\ExceptionMissingCsrfToken;
 use Programster\GoogleSso\Exceptions\ExceptionUnexpectedResponse;
+use Programster\GoogleSso\Exceptions\ExceptionUnverifiedEmail;
 
 /** @var \Programster\GoogleSso\Testing\SmokeTest $smoke */
 
@@ -28,6 +29,7 @@ $testCommonBase = function () : void {
         new ExceptionMfaRequired(["pwd"]),
         new ExceptionMissingCallbackParameter("code"),
         new ExceptionUnexpectedResponse(new Response(500)),
+        new ExceptionUnverifiedEmail("ada@example.com"),
     ];
 
     foreach ($exceptions as $exception)

@@ -24,23 +24,22 @@ The Laravel and Symfony stores below are written against those frameworks' sessi
 tests only cover the stores that come with it, so check that a login works end to end in your app.
 
 ## Plain PHP
-Call `session_start()` before both `createGoogleSsoLoginUrl()` (or `sendUserToGoogleLogin()`) and
-`handleGoogleSsoCallback()`, and pass `$_GET` to the callback. See the [quick start](../README.md#quick-start).
-
-`sendUserToGoogleLogin()` sends a `Location` header and exits, so it only suits plain PHP, where nothing else needs to
-happen after the redirect.
+Call `session_start()` before both `createGoogleSsoLoginUrl()` and `handleGoogleSsoCallback()`, send the user to the
+login URL with `header("Location: ...")`, and pass `$_GET` to the callback. See the
+[quick start](../README.md#quick-start).
 
 ## Slim and other PSR-7 frameworks
-In a framework where routes return a PSR-7 response, don't use `sendUserToGoogleLogin()`, as it calls `header()` and
-`die()`, which skips the framework's response (and any middleware that adds headers or cookies to it). Redirect to
-`createGoogleSsoLoginUrl()` instead, and pass `$request->getQueryParams()` to the callback:
+In a framework where routes return a PSR-7 response, return `createGoogleSsoLoginResponse()`, which is a redirect to
+Google's login page, created with the `responseFactory` you gave the client. It isn't to be cached (it has a
+`Cache-Control: no-store` header), as it carries the user's CSRF token. Pass `$request->getQueryParams()` to the
+callback:
 
 ```php
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 
 $sendToGoogle = function (ServerRequestInterface $request, ResponseInterface $response) use ($googleSso) {
-    return $response->withHeader('Location', $googleSso->createGoogleSsoLoginUrl())->withStatus(302);
+    return $googleSso->createGoogleSsoLoginResponse();
 };
 
 $handleGoogleCallback = function (ServerRequestInterface $request, ResponseInterface $response) use ($googleSso) {
@@ -112,6 +111,7 @@ $createGoogleSso = function (Request $request) : GoogleSsoClient {
         clientSecret: config('services.google.client_secret'),
         googleCallbackUrl: url('/login/callback'),
         requestFactory: new \GuzzleHttp\Psr7\HttpFactory(),
+        responseFactory: new \GuzzleHttp\Psr7\HttpFactory(),
         httpClient: new \GuzzleHttp\Client(['timeout' => 10]),
         csrfTokenStore: new LaravelCsrfTokenStore($request->session()),
     );
@@ -181,8 +181,8 @@ final readonly class SymfonyCsrfTokenStore implements CsrfTokenStoreInterface
 ```
 
 Then pass it as the `csrfTokenStore` when you define the `GoogleSsoClient` service. In your controller, return a
-`RedirectResponse` to `createGoogleSsoLoginUrl()`, rather than calling `sendUserToGoogleLogin()`, which exits instead
-of returning Symfony's response, and pass `$request->query->all()` to `handleGoogleSsoCallback()`.
+`RedirectResponse` to `createGoogleSsoLoginUrl()`, as Symfony's responses aren't PSR-7 ones, and pass
+`$request->query->all()` to `handleGoogleSsoCallback()`.
 
 ## Long-running servers (RoadRunner, Swoole, FrankenPHP workers)
 In these servers, one PHP process handles many requests, and `$_SESSION` isn't per request unless your session

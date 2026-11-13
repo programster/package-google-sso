@@ -18,6 +18,9 @@ use Programster\GoogleSso\Exceptions\ExceptionInvalidIdToken;
 use Programster\GoogleSso\Exceptions\ExceptionMissingCallbackParameter;
 use Programster\GoogleSso\Exceptions\ExceptionMissingCsrfToken;
 use Programster\GoogleSso\Exceptions\ExceptionUnexpectedResponse;
+use Programster\GoogleSso\Exceptions\ExceptionUnverifiedEmail;
+use Programster\GoogleSso\LoginPromptEnum;
+use Programster\GoogleSso\UnverifiedEmailPolicyEnum;
 use Programster\GoogleSso\Testing\FakeGoogleHttpClient;
 use Programster\GoogleSso\Testing\SmokeTest;
 use Programster\GoogleSso\Testing\TestFixtures;
@@ -91,20 +94,6 @@ $testTokenRequest = function () : void {
 
 $smoke->run("handleGoogleSsoCallback sends a form-encoded token request", $testTokenRequest);
 
-$testDeprecatedHandler = function () : void {
-    $client = TestFixtures::createClient(FakeGoogleHttpClient::issuingIdToken(TestFixtures::validClaims()));
-    $state = TestFixtures::startLogin($client);
-    $_GET = TestFixtures::callbackParameters($state);
-    assert($client->handleGoogleSsoLogin()->getEmail() === 'someone@example.com', "it should read \$_GET");
-
-    # Its parameters override $_GET, for frameworks that don't fill it in.
-    $state = TestFixtures::startLogin($client);
-    $_GET = ['code' => 'ignored', 'state' => 'ignored'];
-    $user = $client->handleGoogleSsoLogin(TestFixtures::callbackParameters($state)['code'], $state);
-    assert($user->getEmail() === 'someone@example.com');
-};
-
-$smoke->run("handleGoogleSsoLogin (deprecated) still works", $testDeprecatedHandler);
 
 
 # The callback's state (CSRF token)
@@ -431,6 +420,63 @@ $testUnknownKey = function () : void {
 };
 
 $smoke->run("a key that isn't in Google's fresh certificates either is refused after one fetch", $testUnknownKey);
+
+$testLoginResponse = function () : void {
+    $client = TestFixtures::createClient(FakeGoogleHttpClient::issuingIdToken(TestFixtures::validClaims()));
+    $response = $client->createGoogleSsoLoginResponse(prompt: LoginPromptEnum::SELECT_ACCOUNT);
+    assert($response->getStatusCode() === 302, "it should be a redirect");
+    $loginUrl = $client->createGoogleSsoLoginUrl(LoginPromptEnum::SELECT_ACCOUNT);
+    assert($response->getHeaderLine("Location") === $loginUrl, "it should redirect to the login URL");
+    assert(str_contains($response->getHeaderLine("Location"), "prompt=select_account"), "the options should be used");
+    assert($response->getHeaderLine("Cache-Control") === "no-store", "it carries a CSRF token");
+};
+
+$smoke->run("createGoogleSsoLoginResponse redirects to the login URL", $testLoginResponse);
+
+$testUnverifiedEmailRefused = function () : void {
+    $claimsWithoutEmailVerified = TestFixtures::validClaims();
+    unset($claimsWithoutEmailVerified['email_verified']);
+
+    $unverifiedClaims = [
+        "false" => TestFixtures::validClaims(['email_verified' => false]),
+        "missing" => $claimsWithoutEmailVerified,
+    ];
+
+    foreach ($unverifiedClaims as $description => $claims)
+    {
+        $client = TestFixtures::createClient(FakeGoogleHttpClient::issuingIdToken($claims));
+        $state = TestFixtures::startLogin($client);
+
+        $handleCallback = function () use ($client, $state) : void {
+            $client->handleGoogleSsoCallback(TestFixtures::callbackParameters($state));
+        };
+
+        $exception = SmokeTest::expectException(ExceptionUnverifiedEmail::class, $handleCallback, "hasn't verified");
+        assert($exception->getEmail() === "someone@example.com", "email_verified {$description}: wrong email");
+        assert(!str_contains($exception->getMessage(), "@"), "the email shouldn't be in the message");
+    }
+};
+
+$smoke->run("handleGoogleSsoCallback refuses an unverified email address by default", $testUnverifiedEmailRefused);
+
+$testUnverifiedEmailAllowed = function () : void {
+    $allow = UnverifiedEmailPolicyEnum::ALLOW;
+
+    $claimsByVerified = [
+        "unverified" => TestFixtures::validClaims(['email_verified' => false]),
+        "verified" => TestFixtures::validClaims(),
+    ];
+
+    foreach ($claimsByVerified as $description => $claims)
+    {
+        $client = TestFixtures::createClient(FakeGoogleHttpClient::issuingIdToken($claims));
+        $state = TestFixtures::startLogin($client);
+        $googleUser = $client->handleGoogleSsoCallback(TestFixtures::callbackParameters($state), $allow);
+        assert($googleUser->getEmailVerified() === ($description === "verified"), "{$description} users should get in");
+    }
+};
+
+$smoke->run("handleGoogleSsoCallback lets an unverified email address through with ALLOW", $testUnverifiedEmailAllowed);
 
 $testSessionClaimsThroughCallback = function () : void {
     $authTime = time() - 60;

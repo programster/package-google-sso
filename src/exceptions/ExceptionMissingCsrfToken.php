@@ -10,7 +10,7 @@ namespace Programster\GoogleSso\Exceptions;
  * the user pressed back and reloaded the callback page). It extends ExceptionCsrfTokenMismatch, so code that catches
  * that catches this too.
  */
-class ExceptionMissingCsrfToken extends ExceptionCsrfTokenMismatch
+final class ExceptionMissingCsrfToken extends ExceptionCsrfTokenMismatch
 {
     /**
      * @param string $googleResponseStateToken - the "state" that came back in the callback's query parameters.

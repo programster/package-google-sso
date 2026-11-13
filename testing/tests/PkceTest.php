@@ -77,6 +77,7 @@ $testDependsOnSecret = function () use ($getLoginUrlParameters) : void {
         clientSecret: "another-secret",
         googleCallbackUrl: TestFixtures::CALLBACK_URL,
         requestFactory: new HttpFactory(),
+        responseFactory: new HttpFactory(),
         httpClient: FakeGoogleHttpClient::issuingIdToken(TestFixtures::validClaims()),
     );
 
