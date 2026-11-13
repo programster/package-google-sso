@@ -1,11 +1,21 @@
 # Upgrading
 
+- [Unreleased](#unreleased)
 - [From 0.2.0 to 0.3.0](#from-020-to-030)
 - [From 0.1.0 to 0.2.0](#from-010-to-020)
 - [From 0.0.2 to 0.1.0](#from-002-to-010)
     - [Changes you should make](#changes-you-should-make)
     - [Changes in behaviour](#changes-in-behaviour)
     - [New features](#new-features)
+
+## Unreleased
+Nothing has been removed or changed in a way that needs your code to change.
+
+- **`GoogleUserData` reads how the user signed in to Google**: `getAuthenticationMethods()` and `getAuthTime()`, for
+  Google's `amr` and `auth_time` claims, with `hasAuthenticationMethod()`, `hasMultiFactorAuthentication()` and
+  `AuthenticationMethodEnum`. Google only sends these claims when the login asks for them, which the package doesn't
+  do yet, so they are empty for now. See
+  [How the user signed in to Google](user-data.md#how-the-user-signed-in-to-google).
 
 ## From 0.2.0 to 0.3.0
 Nothing has been removed or changed in a way that needs your code to change.

@@ -426,3 +426,15 @@ $testUnknownKey = function () : void {
 };
 
 $smoke->run("a key that isn't in Google's fresh certificates either is refused after one fetch", $testUnknownKey);
+
+$testSessionClaimsThroughCallback = function () : void {
+    $authTime = time() - 60;
+    $claims = TestFixtures::validClaims(['amr' => ["swk"], 'auth_time' => $authTime]);
+    $client = TestFixtures::createClient(FakeGoogleHttpClient::issuingIdToken($claims));
+    $state = TestFixtures::startLogin($client);
+    $googleUser = $client->handleGoogleSsoCallback(TestFixtures::callbackParameters($state));
+    assert($googleUser->getAuthenticationMethods() === ["swk"] && $googleUser->getAuthTime() === $authTime);
+    assert($googleUser->hasMultiFactorAuthentication());
+};
+
+$smoke->run("handleGoogleSsoCallback passes on the amr and auth_time claims", $testSessionClaimsThroughCallback);
