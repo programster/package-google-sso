@@ -59,6 +59,7 @@ Any PSR-18 client and PSR-17 factory will do. Some common choices:
 |---|---|---|
 | `guzzlehttp/guzzle` | `new \GuzzleHttp\Psr7\HttpFactory()` | `new \GuzzleHttp\Client(['timeout' => 10])` |
 | `symfony/http-client` and `nyholm/psr7` | `new \Nyholm\Psr7\Factory\Psr17Factory()` | `new \Symfony\Component\HttpClient\Psr18Client()` |
+| `kriswallsmith/buzz` and `nyholm/psr7` | `new \Nyholm\Psr7\Factory\Psr17Factory()` | `new \Buzz\Client\Curl($factory, ['timeout' => 10])`, where `$factory` is the `Psr17Factory`. Needs the `curl` extension. The smallest install. |
 
 Whichever you use, give it a timeout, so that if Google is slow to respond, your callback page fails after a few
 seconds, rather than hanging for as long as PHP allows. Any proxy settings it has are used for both requests to Google.

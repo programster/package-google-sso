@@ -59,11 +59,14 @@ call every one of Google's APIs, from Drive to YouTube, and you get all of them.
 | | Packages | PHP files | Size of `vendor/` |
 |---|---|---|---|
 | `google/apiclient` | 16 | 38,212 | 214 MB |
-| `programster/google-sso` (with Guzzle) | 12 | 384 | 4.2 MB |
+| `programster/google-sso` with Guzzle 8.5 | 12 | 220 | 2.8 MB |
+| `programster/google-sso` with Buzz 1.4 and Nyholm PSR-7 1.8 | 12 | 132 | 1.1 MB |
 
-Google's package can be slimmed down with its `Google\Task\Composer::cleanup` script, but logging users in only needs
-two HTTP requests and a signature check, so this package does just that. It also isn't tied to one HTTP client: it uses
-the PSR-17 and PSR-18 interfaces, so it works with Guzzle, Symfony's HttpClient, or whatever your project already has.
+Of those files, the package itself is 18. The rest are the HTTP client and the PSR interfaces. Google's package can be
+slimmed down with its `Google\Task\Composer::cleanup` script, but logging users in only needs two HTTP requests and a
+signature check, so this package does just that. It also isn't tied to one HTTP client: it uses the PSR-17 and PSR-18
+interfaces, so it works with Guzzle, Buzz, Symfony's HttpClient, or whatever your project already has (see
+[Choosing an HTTP client](docs/configuration.md#choosing-an-http-client)).
 
 ## Requirements
 - PHP 8.2 or later (8.2, 8.3, 8.4 and 8.5 are tested).
