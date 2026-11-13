@@ -2,6 +2,7 @@
 
 - [Running the tests](#running-the-tests)
 - [Testing every supported PHP version](#testing-every-supported-php-version)
+- [On GitHub](#on-github)
 - [Running some of the tests](#running-some-of-the-tests)
 - [How the tests talk to Google](#how-the-tests-talk-to-google)
 - [Writing tests](#writing-tests)
@@ -41,6 +42,11 @@ it to `SUPPORTED_VERSIONS` at the top of the script.
 The containers use the `vendor/` directory from `composer install`. `composer.json` sets Composer's platform to PHP
 8.2, so the development dependencies it installs work on every supported version, whichever version you run Composer
 with.
+
+## On GitHub
+`.github/workflows/tests.yml` does the same on GitHub, for every push and pull request: it lints every file, and runs
+the tests on each supported version of PHP. The README's "Tests" badge shows whether they pass on `main`. When a new
+version of PHP is released, add it to the workflow's `php` list, as well as to `run-all-php-versions.sh`.
 
 ## Running some of the tests
 Set `GOOGLESSO_TEST_ONLY` to run only the tests whose name contains it. It fails if no test matches, so a typo can't

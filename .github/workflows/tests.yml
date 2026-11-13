@@ -1,0 +1,36 @@
+# Runs the same checks as testing/run-all-php-versions.sh on every supported version of PHP: lints every file, and runs
+# the smoke tests. The README's "Tests" badge shows the result for main.
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.2", "8.3", "8.4", "8.5"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+          ini-values: zend.assertions=1, assert.exception=1
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Lint
+        run: find src testing -name '*.php' -print0 | xargs -0 -n 1 php -l > /dev/null
+
+      - name: Run the tests
+        run: php -d zend.assertions=1 testing/main.php

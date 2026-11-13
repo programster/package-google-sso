@@ -1,6 +1,8 @@
 Google SSO
 ==========
 
+[![Tests](https://github.com/programster/package-google-sso/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/programster/package-google-sso/actions/workflows/tests.yml)
+
 ## Contents
 - [About](#about)
     - [Why not Google's own package?](#why-not-googles-own-package)
